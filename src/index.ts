@@ -1,12 +1,12 @@
 import { FinalizableMap } from "./finalizableMap";
-
+console.log("Hello World!");
 const map = new FinalizableMap();
 let a: object = new String("a");
 map.onGarbageCollected = (key: String) => {
     console.log(`Garbage collected ${key}`);
 }
 map.set("key", a); 
-a = new String("b");
+a = new String("bagergeraagergera");
 
 
 

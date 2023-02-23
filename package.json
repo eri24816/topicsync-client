@@ -12,10 +12,10 @@
     "webpack-dev-server": "^4.11.1"
   },
   "scripts": {
-    "ts": "tsc -w",
-    "serve": "cd dist && web-dev-server --node-resolve --watch --open --app-index index.html",
-    "webpack": "webpack --mode development --watch",
-    "start": " yarn serve & yarn webpack"
-  },
-  "dependencies": {}
+    "ts-build": "tsc",
+    "ts-build:watch": "tsc -w",
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "build:watch": "webpack --mode development --watch"
+  }
 }

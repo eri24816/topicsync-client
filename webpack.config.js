@@ -1,25 +1,28 @@
+const path = require('path');
 module.exports = {
+  entry: "./src/index.ts",
+  plugins: [],
+  module: { rules: [] },
+  resolve: { extensions: [".ts", ".js"] },
   mode: "development",
-  devtool: "inline-source-map",
-  entry: "./src/app.ts",
-  output: {
-    path: __dirname + "/dist",
-    filename: "bundle.js"
-  },
-  resolve: {
-    // Add `.ts` and `.tsx` as a resolvable extension.
-    extensions: [".ts", ".tsx", ".js"],
-    // Add support for TypeScripts fully qualified ESM imports.
-    extensionAlias: {
-     ".js": [".js", ".ts"],
-     ".cjs": [".cjs", ".cts"],
-     ".mjs": [".mjs", ".mts"]
-    }
-  },
+  watch: true,
   module: {
     rules: [
-      // all files with a `.ts`, `.cts`, `.mts` or `.tsx` extension will be handled by `ts-loader`
-      { test: /\.([cm]?ts|tsx)$/, loader: "ts-loader" }
+            
+    
+      {
+        test: /\.ts$/i,
+        loader: "ts-loader"
+      }
+    
+            
     ]
-  }
+  },
+  devServer: {
+    static: {
+      directory: path.join(__dirname, 'dist'),
+    },
+    compress: true,
+    port: 9000,
+  },
 };
