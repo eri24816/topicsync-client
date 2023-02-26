@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "devDependencies": {
+    "@types/uuid": "^9.0.1",
     "@web/dev-server": "^0.1.35",
     "ts-loader": "^9.4.2",
     "typescript": "^4.9.5",
@@ -17,5 +18,8 @@
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
     "build:watch": "webpack --mode development --watch"
+  },
+  "dependencies": {
+    "deepcopy": "^2.1.0"
   }
 }

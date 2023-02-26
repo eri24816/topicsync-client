@@ -1,17 +1,19 @@
-import { FinalizableMap } from "./finalizableMap";
-console.log("Hello World!");
-const map = new FinalizableMap();
-let a: object = new String("a");
-map.onGarbageCollected = (key: String) => {
-    console.log(`Garbage collected ${key}`);
-}
-map.set("key", a); 
-a = new String("bagergeraagergera");
+import { ChatroomClient } from './client';
+import { StringTopic } from './topic';
+import { expose, print } from './dev_utils';
 
-
-
-// const ws: WebSocket = new WebSocket('ws://localhost:8765');
-
-// ws.onopen = () => {
-//     ws.send('Hello World!');
-// }
+const client = new ChatroomClient('ws://localhost:8766');
+client.onConnected(() => {
+    client.makeRequest('add', {a:1,b:2}, (response: any) => {
+        print('1+2=',response);
+    });
+    client.makeRequest('greet', {name:'Eric'}, (response: any) => {
+        print(response);
+    });
+    const a = client.registerTopic('a', StringTopic);
+    a.onSet.addCallback((change) => {
+        print('a changed:', change);
+    });
+    expose('client', client);
+    expose('a', a);
+});
