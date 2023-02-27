@@ -52,3 +52,7 @@ export class Action<ARGS extends any[], OUT=void> {
         return this._callbacks.map((callback) => callback(...args));
     }
 }
+
+export function equalValue(a: any, b: any) {
+    return JSON.stringify(a) === JSON.stringify(b);
+}

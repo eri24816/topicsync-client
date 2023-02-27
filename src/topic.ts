@@ -1,6 +1,8 @@
-import { Action, camel_to_snake, defined } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SubclassOfChange } from './topicChange';
+import { Action, camel_to_snake, equalValue } from './utils';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, SubclassOfChange } from './topicChange';
 import {CommandManager, ChangeCommand} from './command';
+import deepcopy from 'deepcopy';
+import { ValueSet } from './collection';
 
 type Validator<T> = (oldValue: T, newValue: T, change: Change<T>) => boolean;
 
@@ -15,6 +17,8 @@ export abstract class Topic<T>{
         switch (name) {
             case 'string':
                 return StringTopic;
+            case 'set':
+                return SetTopic;
             default:
                 throw new Error(`Unknown topic type: ${name}`);
         }
@@ -131,5 +135,54 @@ export class StringTopic extends Topic<string>{
 
     protected notifyListeners(change: Change<string>, oldValue: string, newValue: string): void{
         this.onSet.invoke(newValue);
+    }
+}
+
+export class SetTopic extends Topic<ValueSet>{
+    public changeTypes = {
+        'set': SetChangeTypes.Set,
+        'append': SetChangeTypes.Append,
+        'remove': SetChangeTypes.Remove,
+    }
+    onSet: Action<[any[]], void>;
+    onAppend: Action<[any], void>;
+    onRemove: Action<[any], void>;
+    protected value: ValueSet;
+    constructor(name:string,command_manager:CommandManager){
+        super(name,command_manager);
+        this.value = new ValueSet();
+        this.onSet = new Action();
+        this.onAppend = new Action();
+        this.onRemove = new Action();
+    }
+
+    public set(value: any[]): void{
+        this.applyChangeExternal(new SetChangeTypes.Set(value));
+    }
+
+    public append(value: any): void{
+        this.applyChangeExternal(new SetChangeTypes.Append(value));
+    }
+
+    public remove(value: any): void{
+        this.applyChangeExternal(new SetChangeTypes.Remove(value));
+    }
+
+    protected notifyListeners(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
+        if (change instanceof SetChangeTypes.Set) {
+            this.onSet.invoke(newValue.toArray());
+            for(const value of newValue.substract(oldValue))
+                this.onAppend.invoke(value);
+            for(const value of oldValue.substract(newValue))
+                this.onRemove.invoke(value);
+        }
+        else if (change instanceof SetChangeTypes.Append) {
+            this.onSet.invoke(newValue.toArray());
+            this.onAppend.invoke(deepcopy(change.item));
+        }
+        else if (change instanceof SetChangeTypes.Remove) {
+            this.onSet.invoke(newValue.toArray());
+            this.onRemove.invoke(deepcopy(change.item));
+        }
     }
 }

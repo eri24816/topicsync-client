@@ -42,7 +42,7 @@ export class ChatroomClient{
         this.onConnect = new Action<[], void>();
         
         this.ws.onmessage = (event) => {
-            console.log('>\t'+event.data);
+            console.debug('>\t'+event.data);
             const data = JSON.parse(event.data);
             const message_type = data['type'];
             const args = data['args'];
@@ -51,9 +51,8 @@ export class ChatroomClient{
     }
 
     private sendToServer(message_type: string, args: any) {
-        console.log(message_type, args);
         const message = JSON.stringify({type: message_type, args: args});
-        console.log('<\t'+message);
+        console.debug('<\t'+message);
         this.ws.send(message);
     }
 
@@ -78,7 +77,7 @@ export class ChatroomClient{
 
     private handleHello({id}: {id: number}) {
         this.clientID = id;
-        console.log(`Connected to server with client ID ${id}`);
+        console.debug(`[ChatRoom] Connected to server with client ID ${id}`);
         this.onConnect.invoke();
     }
 

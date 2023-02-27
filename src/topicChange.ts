@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { ValueSet } from "./collection";
 export type SubclassOfChange<T> = new (...args: any[]) => Change<T>
 
 export class InvalidChangeException extends Error {
@@ -38,6 +39,12 @@ export abstract class Change<T> {
     switch (changeType) {
       case StringChangeTypes.Set:
         return new StringChangeTypes.Set(rest.value, rest.old_value, rest.id);
+      case SetChangeTypes.Set:
+        return new SetChangeTypes.Set(rest.value, rest.old_value, rest.id);
+      case SetChangeTypes.Append:
+        return new SetChangeTypes.Append(rest.item, rest.id);
+      case SetChangeTypes.Remove:
+        return new SetChangeTypes.Remove(rest.item, rest.id);
       default:
         throw new Error(`Unknown change type: ${type}`);
     }
@@ -86,18 +93,84 @@ class SetChange<T> extends Change<T> {
   }
 }
 
-interface ChangeTypeCollection {
-  types: {
-    [key: string]: typeof Change;
-  };
-}
-
 export namespace StringChangeTypes  {
   export const Set = SetChange<string>;
 }
 
-export const TypeNameToChangeTypes: {
-  [key: string]: any;
-} = {
-  string: StringChangeTypes
+export namespace SetChangeTypes  {
+  export class Set extends Change<ValueSet> {
+    value: ValueSet;
+    old_value?: ValueSet;
+    constructor(value: any[], old_value?: any[], id?: string) {
+      super(id);
+      this.value = new ValueSet(value);
+      this.old_value = old_value ? new ValueSet(old_value) : undefined;
+    }
+    apply(oldValue: ValueSet): ValueSet {
+      this.old_value = oldValue.copy();
+      return this.value.copy();
+    }
+    serialize(): ChangeDict {
+      return {
+        type: "set",
+        value: this.value.toArray(),
+        old_value: this.old_value?.toArray(),
+        id: this.id,
+      };
+    }
+    inverse(): Change<ValueSet> {
+      if (this.old_value === undefined) {
+        throw new InvalidChangeException("Cannot inverse the change before it is applied.");
+      }
+      return new Set(this.old_value.toArray(), this.value.toArray()); 
+    }
+  }
+
+
+  export class Append extends Change<ValueSet> {
+    item: any;
+    constructor(item: any, id?: string) {
+      super(id);
+      this.item = item;
+    }
+    apply(oldValue: ValueSet): ValueSet {
+      const newValue = oldValue.copy();
+      if (!newValue.add(this.item))
+        throw new InvalidChangeException(`Item ${this.item} already exists in set.`)
+      return newValue;
+    }
+    serialize(): ChangeDict {
+      return {
+        type: "append",
+        item: this.item,
+        id: this.id,
+      };
+    }
+    inverse(): Change<ValueSet> {
+      return new Remove(this.item);
+    }
+  }
+  export class Remove extends Change<ValueSet> {
+    item: any;
+    constructor(item: any, id?: string) {
+      super(id);
+      this.item = item;
+    }
+    apply(oldValue: ValueSet): ValueSet {
+      const newValue = oldValue.copy();
+      if (!newValue.delete(this.item))
+        throw new InvalidChangeException(`Item ${this.item} not found in set.`);
+      return newValue;
+    }
+    serialize(): ChangeDict {
+      return {
+        type: "remove",
+        item: this.item,
+        id: this.id,
+      };
+    }
+    inverse(): Change<ValueSet> {
+      return new Append(this.item);
+    }
+  }
 }

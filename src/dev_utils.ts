@@ -5,3 +5,5 @@ export function expose(name:string,object: any): void {
 export function print(...args: any[]): void {
   console.log(...args);
 }
+
+expose('print', print);
