@@ -116,7 +116,9 @@ export class ChatroomClient{
             }
             else {
                 this.undoAll(this.previewPath);
-                this.previewPath.length = 0; // Clear the array
+                while(this.previewPath.length>0){
+                    this.previewPath.shift();
+                }
                 topic.applyChange(change);
             }
 
@@ -124,11 +126,14 @@ export class ChatroomClient{
     }
 
     private handleRejectUpdate({ topic_name, change, reason }: { topic_name: string, change: any, reason: string }) {
-        console.warn(`Update rejected for topic ${topic_name}: ${reason}`);
+        console.warn(`Update rejected for topic ${topic_name}: ${reason}`, [...this.previewPath]);
         if(this.previewPath.length>0 && change.id == this.previewPath[0].change.id){
             this.undoAll(this.previewPath);
-            this.previewPath.length = 0; // Clear the array
+            while(this.previewPath.length>0){
+                this.previewPath.shift();
+            }
         }
+        console.warn([...this.previewPath]);
     }
 
     public makeRequest(serviceName: string, args: any, onResponse : (response: any)=>void): void {

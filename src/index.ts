@@ -1,6 +1,7 @@
 import { ChatroomClient } from './client';
 import { StringTopic } from './topic';
 import { expose, print } from './dev_utils';
+import { TopicsMonitor } from './topicsMonitor';
 
 const client = new ChatroomClient('ws://localhost:8766');
 client.onConnected(() => {
@@ -16,4 +17,6 @@ client.onConnected(() => {
     });
     expose('client', client);
     expose('a', a);
+
+    const monitor = new TopicsMonitor(document.body, client);
 });

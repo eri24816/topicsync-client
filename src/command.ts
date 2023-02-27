@@ -20,7 +20,7 @@ export class ChangeCommand<T> extends Command {
   topic: Topic<T>;
   change: Change<T>;
 
-  constructor(topic: Topic<T>, change: Change<T>, preview: boolean = false) {
+  constructor(topic: Topic<T,any>, change: Change<T>, preview: boolean = false) {
     super(preview);
     this.topic = topic;
     this.change = change;

@@ -12,7 +12,7 @@ interface ChangeDict {
 }
 
 
-export abstract class Topic<T>{
+export abstract class Topic<T,TI=T>{
     static GetTypeFromName(name: string): { new(name: string, commandManager: CommandManager): Topic<any>; }{
         switch (name) {
             case 'string':
@@ -28,7 +28,8 @@ export abstract class Topic<T>{
     private commandManager: CommandManager;
     private validators: Validator<T>[];
     private noPreviewChangeTypes: Set<SubclassOfChange<T>>;
-    public abstract readonly changeTypes: {[key:string]:SubclassOfChange<T> }
+    public abstract readonly changeTypes: { [key: string]: SubclassOfChange<T> }
+    public abstract onSet: Action<[TI],void>;
     constructor(name:string,command_manager:CommandManager){
         this.name = name;
         this.commandManager = command_manager;
@@ -43,9 +44,7 @@ export abstract class Topic<T>{
         return this.name;
     }
 
-    public getValue(): T{
-        return this.value;
-    }
+    public abstract getValue(): TI;
 
     public addValidator(validator: Validator<T>): void{
         this.validators.push(validator);
@@ -129,6 +128,10 @@ export class StringTopic extends Topic<string>{
         this.onSet = new Action();
     }
 
+    public getValue(): string {
+        return this.value;
+    }
+
     public set(value: string): void{
         this.applyChangeExternal(new StringChangeTypes.Set(value));
     }
@@ -138,7 +141,7 @@ export class StringTopic extends Topic<string>{
     }
 }
 
-export class SetTopic extends Topic<ValueSet>{
+export class SetTopic extends Topic<ValueSet,any[]>{
     public changeTypes = {
         'set': SetChangeTypes.Set,
         'append': SetChangeTypes.Append,
@@ -154,6 +157,10 @@ export class SetTopic extends Topic<ValueSet>{
         this.onSet = new Action();
         this.onAppend = new Action();
         this.onRemove = new Action();
+    }
+
+    public getValue(): any[] {
+        return this.value.toArray();
     }
 
     public set(value: any[]): void{
