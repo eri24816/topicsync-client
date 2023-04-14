@@ -3,10 +3,6 @@ import { SetTopic, Topic } from "./topic";
 import { defined } from "./utils";
 import { print } from "./dev_utils";
 
-/*
-Note: the topics monitor keeps track of all topics. It prevents the topics from being garbage collected.
-Solve this problem by explicitly deleting the topic.
-*/
 export class TopicsMonitor{
     container: HTMLElement;
     table: HTMLTableElement; 
@@ -22,6 +18,10 @@ export class TopicsMonitor{
         this.table.style.borderCollapse = 'collapse';
         this.rows = new Map<string, HTMLTableRowElement>();
 
+        this.client = client;
+
+        this.topics = new Map<string, Topic<any>>();
+
         // add th
         const header = document.createElement('tr');
         header.innerHTML = '<th>Topic Name</th><th>Type</th><th>Value</th>';
@@ -36,18 +36,16 @@ export class TopicsMonitor{
         this.table.appendChild(header);
 
         this.container.appendChild(this.table);
-        this.topicList = client.registerTopic('_chatroom/topic_list', SetTopic);
+        this.topicList = client.getTopic<SetTopic>('_chatroom/topics');
         this.topicList.onAppend.addCallback(this.topicAdded.bind(this));
         this.topicList.onRemove.addCallback(this.topicRemoved.bind(this));
         for(const topic of this.topicList.getValue()){
             this.topicAdded(topic);
         }
-        this.topics = new Map<string, Topic<any>>();
-        this.client = client;
     }
 
-    private topicAdded({ topic_name, type }: { topic_name: string, type: string }): void{
-        const topic = this.client.registerTopic(topic_name, Topic.GetTypeFromName(type))
+    private topicAdded({ topic_name, topic_type }: { topic_name: string, topic_type: string }): void{
+        const topic = this.client.getTopic(topic_name)
         topic.onSet.addCallback((value) => {
             print('topic changed:', topic_name, JSON.stringify(value), typeof topic.getValue());
             defined(row.children[2]).textContent = JSON.stringify(value);
@@ -57,7 +55,7 @@ export class TopicsMonitor{
         print('init topic:', topic_name, JSON.stringify(topic.getValue()), typeof topic.getValue());
         
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${topic_name}</td><td>${type}</td><td>${JSON.stringify(topic.getValue())}</td>`;
+        row.innerHTML = `<td>${topic_name}</td><td>${topic_type}</td><td>${JSON.stringify(topic.getValue())}</td>`;
         // padding left
         for(const cell of row.children as HTMLCollectionOf<HTMLElement>){
             cell.style.paddingLeft = '5px';

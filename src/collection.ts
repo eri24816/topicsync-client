@@ -1,6 +1,6 @@
 export class ValueSet{
     private values: Set<string>;
-    constructor(values: string[] = []){
+    constructor(values: any[] = []){
         this.values = new Set(values.map(v=>JSON.stringify(v)));
     }
     public has(value: any): boolean{

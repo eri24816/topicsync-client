@@ -1,5 +1,7 @@
-import { ChangeCommand, Command, CommandManager } from "./command";
-import { Topic } from "./topic";
+import { print } from "./dev_utils";
+import { StateManager } from "./state_manager";
+import { SetTopic, Topic } from "./topic";
+import { Change } from "./topicChange";
 import { Action, defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,20 +16,18 @@ class Request{
 
 export class ChatroomClient{
     private readonly ws: WebSocket;
-    private readonly topics: Map<string, Topic<any>>;
-    private readonly commandManager: CommandManager;
-    private readonly previewPath: ChangeCommand<any>[];
+    private readonly stateManager: StateManager;
     private clientID: Number;
     private readonly requestPool: Map<string, Request>;
     private readonly servicePool: Map<string, (data: any) => any>;
     private readonly messageHandlers: Map<string, (data: any) => void>;
     private readonly onConnect: Action<[], void>;
+    private readonly topicSet: SetTopic;
+    private onConnectCalled: boolean;
 
     constructor(host: string){
         this.ws = new WebSocket(host);
-        this.topics = new Map<string, Topic<any>>();
-        this.commandManager = new CommandManager(this.onRecordingStop.bind(this), this.onAddCommand.bind(this));
-        this.previewPath = new Array<ChangeCommand<any>>();
+        this.stateManager = new StateManager(this.onActionProduced.bind(this));
         this.clientID = -1;
         this.requestPool = new Map<string, Request>; 
         this.servicePool = new Map<string, (data: any) => void>();
@@ -36,10 +36,12 @@ export class ChatroomClient{
             ['request', this.handleRequest.bind(this)],
             ['response', this.handleResponse.bind(this)],
             ['update', this.handleUpdate.bind(this)],
-            ['reject_update', this.handleRejectUpdate.bind(this)],
+            ['reject', this.handleReject.bind(this)],
         ]);
+        this.topicSet = this.stateManager.getTopic<SetTopic>("_chatroom/topics");
 
         this.onConnect = new Action<[], void>();
+        this.onConnectCalled = false;
         
         this.ws.onmessage = (event) => {
             console.debug('>\t'+event.data);
@@ -56,29 +58,18 @@ export class ChatroomClient{
         this.ws.send(message);
     }
 
-    private onRecordingStop(recordedCommands: Command[]) {
+    private onActionProduced(recordedCommands: Change<any>[]) {
         const commandDicts = [];
         for (const command of recordedCommands) {
-            if(command instanceof ChangeCommand)
             commandDicts.push(command.serialize());
         }
-        this.sendToServer('client_update', { changes: commandDicts });
-        this.commandManager.commit();
-    }
-
-    private onAddCommand(addedCommand: Command) {
-        if (addedCommand instanceof ChangeCommand) {
-            if (addedCommand.preview) {
-                addedCommand.execute();
-                this.previewPath.push(addedCommand);
-            }
-        }
+        this.sendToServer('action', { commands: commandDicts });
     }
 
     private handleHello({id}: {id: number}) {
         this.clientID = id;
         console.debug(`[ChatRoom] Connected to server with client ID ${id}`);
-        this.onConnect.invoke();
+        this.sendToServer('subscribe', { topic_name: "_chatroom/topics" });
     }
 
     private handleRequest({service_name: serviceName,args,request_id:requestId}: {service_name: string, args: any, request_id: string}) {
@@ -101,39 +92,23 @@ export class ChatroomClient{
     }
 
     private handleUpdate({changes}: {changes: any[]}) {
-        for (const item of changes) {
-            const topicName = item.topic_name;
-            const changeDict = item.change;
-            if (!this.topics.has(topicName)) { // This may happen when the client just unsubscribed from a topic.
-                console.warn(`Received update for unknown topic ${topicName}`);
-                continue;
-            }
-            const topic = defined(this.topics.get(topicName));
-            const change = topic.deserializeChange(changeDict);
+        const change_objects = [];
+        for (const change_dict of changes) {
+            const topic = defined(this.stateManager.getTopic(change_dict['topic_name']));
+            const change = topic.deserializeChange(change_dict);
+            change_objects.push(change);
+        }
+        this.stateManager.handleUpdate(change_objects);
 
-            if (this.previewPath.length > 0 && change.id == this.previewPath[0].change.id) {
-                this.previewPath.shift();
-            }
-            else {
-                this.undoAll(this.previewPath);
-                while(this.previewPath.length>0){
-                    this.previewPath.shift();
-                }
-                topic.applyChange(change);
-            }
-
+        if (!this.onConnectCalled) {
+            // when server sends the value of _chatroom/topics, client can do things about topics
+            this.onConnectCalled = true;
+            this.onConnect.invoke();
         }
     }
 
-    private handleRejectUpdate({ topic_name, change, reason }: { topic_name: string, change: any, reason: string }) {
-        console.warn(`Update rejected for topic ${topic_name}: ${reason}`, [...this.previewPath]);
-        if(this.previewPath.length>0 && change.id == this.previewPath[0].change.id){
-            this.undoAll(this.previewPath);
-            while(this.previewPath.length>0){
-                this.previewPath.shift();
-            }
-        }
-        console.warn([...this.previewPath]);
+    private handleReject({ reason }: {reason: string }) {
+        this.stateManager.handleReject();
     }
 
     public makeRequest(serviceName: string, args: any, onResponse : (response: any)=>void): void {
@@ -143,38 +118,35 @@ export class ChatroomClient{
         this.sendToServer('request', { service_name: serviceName, args: args, request_id: id });
     }
 
-    public registerService(serviceName: string, service: (data: any) => void) {
-        this.servicePool.set(serviceName, service);
-        this.sendToServer('register_service', { service_name: serviceName });
-    }
+    public getTopic<T extends Topic<any>>(topic_name: string): T {
 
-    public registerTopic<T extends Topic<any>>(topic_name: string, topic_type: string|{ new(name: string, commandManager: CommandManager): T; }): T {
-        if (typeof topic_type === 'string') {
-            topic_type = Topic.GetTypeFromName(topic_type) as { new(name: string, commandManager: CommandManager): T; };
-        }
-        
-        if (this.topics.has(topic_name)) {
-            const topic = defined(this.topics.get(topic_name));
+        if (this.stateManager.hasTopic(topic_name)) {
+            const topic = this.stateManager.getTopic(topic_name);
             return topic as T;
         }
-
-        const topic = new topic_type(topic_name, this.commandManager);
-        this.topics.set(topic_name, topic);
-        this.sendToServer('subscribe', { topic_name: topic_name, type: topic.getTypeName() });
-        return topic;
+        if (this.stateManager.existsTopic(topic_name)) {
+            let topic = this.stateManager.subscribe(topic_name);
+            this.sendToServer('subscribe', { topic_name: topic_name});
+            return topic as T;
+        }
+        throw new Error(`Topic ${topic_name} does not exist`);
     }
 
-        
+    //? Should client be able to create and remove topics?
+    public addTopic<T extends Topic<any>>(topic_name: string, topic_type: string|{ new(name: string, commandManager: StateManager): T; }): T {
+        if (typeof topic_type !== 'string') {
+            topic_type = Topic.GetNameFromType(topic_type);
+        }
+        this.topicSet.append({topic_name: topic_name, topic_type: topic_type});
+        let topic = this.stateManager.getTopic(topic_name);
+        return topic as T;
+    } 
 
-    //TODO: Unregister topic
+    public removeTopic(topic_name: string) {
+        this.topicSet.remove(topic_name);
+    }
 
     public onConnected(callback: () => void) {
         this.onConnect.addCallback(callback);
-    }
-
-    private undoAll(commands: ChangeCommand<any>[]) { 
-        for (let i = commands.length - 1; i >= 0; i--) {
-            commands[i].undo();
-        }
     }
 }

@@ -1,6 +1,6 @@
 import { Action, camel_to_snake, equalValue } from './utils';
 import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, SubclassOfChange } from './topicChange';
-import {CommandManager, ChangeCommand} from './command';
+import {StateManager} from './state_manager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
 
@@ -13,28 +13,30 @@ interface ChangeDict {
 
 
 export abstract class Topic<T,TI=T>{
-    static GetTypeFromName(name: string): { new(name: string, commandManager: CommandManager): Topic<any>; }{
-        switch (name) {
-            case 'string':
-                return StringTopic;
-            case 'set':
-                return SetTopic;
-            default:
-                throw new Error(`Unknown topic type: ${name}`);
-        }
+    static getTypeDict(): {[key:string]:{ new(name: string, commandManager: StateManager): Topic<any>; }}
+    {
+        return {string: StringTopic, set: SetTopic}
+    }
+    static GetTypeFromName(name: string): { new(name: string, commandManager: StateManager): Topic<any>; }{
+        return Topic.getTypeDict()[name];
+    }
+    static GetNameFromType(type: { new(name: string, commandManager: StateManager): Topic<any>; }): string{
+        return camel_to_snake(type.name.replace('Topic',''));
     }
     protected name: string;
     protected abstract value: T;
-    private commandManager: CommandManager;
+    private commandManager: StateManager;
     private validators: Validator<T>[];
     private noPreviewChangeTypes: Set<SubclassOfChange<T>>;
     public abstract readonly changeTypes: { [key: string]: SubclassOfChange<T> }
     public abstract onSet: Action<[TI],void>;
-    constructor(name:string,command_manager:CommandManager){
+    private detached: boolean;
+    constructor(name:string,command_manager:StateManager){
         this.name = name;
         this.commandManager = command_manager;
         this.validators = [];
         this.noPreviewChangeTypes = new Set();
+        this.detached = false;
     }
     public getTypeName(): string{
         return camel_to_snake(this.constructor.name.replace('Topic',''));
@@ -44,7 +46,12 @@ export abstract class Topic<T,TI=T>{
         return this.name;
     }
 
-    public abstract getValue(): TI;
+    public getValue(): TI{
+        this.checkDetached();
+        return this._getValue();
+    }
+
+    protected abstract _getValue(): TI;
 
     public addValidator(validator: Validator<T>): void{
         this.validators.push(validator);
@@ -58,6 +65,7 @@ export abstract class Topic<T,TI=T>{
             this.noPreviewChangeTypes.add(change_type);
         }
     }
+
     public enablePreview(change_type?: SubclassOfChange<T>): void{
         if (change_type === undefined) {
             this.noPreviewChangeTypes.clear();
@@ -66,6 +74,7 @@ export abstract class Topic<T,TI=T>{
             this.noPreviewChangeTypes.delete(change_type);
         }
     }
+    
     protected abstract notifyListeners(change: Change<T>, oldValue: T, newValue: T): void;
 
     private validateChangeAndGetResult(change: Change<T>): T{
@@ -90,10 +99,7 @@ export abstract class Topic<T,TI=T>{
     }
 
     public applyChangeExternal(change: Change<T>): void{
-        if (this.commandManager === undefined) {
-            this.applyChange(change);
-            return;
-        }
+        this.checkDetached();
         this.validateChangeAndGetResult(change);
         let preview = true;
         for (const change_type of this.noPreviewChangeTypes) {
@@ -102,17 +108,25 @@ export abstract class Topic<T,TI=T>{
                 break;
             }
         }
-        this.commandManager.record(true, () => {
-            // In the ts implementation, the topic's reference is stored in the command. In the python implementation, 
-            // because the topic class is also used by the server, the topic's name is stored in the command to avoid leaving unused references in the history chain.
-            this.commandManager.add(new ChangeCommand(this,change,preview));
+        this.commandManager.record(() => {
+            this.commandManager.applyChange(change,preview);
         })
     }
 
     public deserializeChange(changeDict: ChangeDict): Change<T> {
         const { type, ...rest } = changeDict;
         const changeType = this.changeTypes[type];
-        return Change.deserialize(changeType,changeDict);
+        return Change.deserialize(this,changeType,changeDict);
+    }
+
+    public setDetached(): void{
+        this.detached = true;
+    }
+
+    private checkDetached(): void{
+        if (this.detached) {
+            throw new Error(`The topic ${this.name} has been removed. You cannot use it anymore.`);
+        }
     }
 }
 
@@ -122,18 +136,18 @@ export class StringTopic extends Topic<string>{
     }
     public onSet: Action<[string], void>;
     protected value: string;
-    constructor(name:string,command_manager:CommandManager){
+    constructor(name:string,command_manager:StateManager){
         super(name,command_manager);
         this.value = '';
         this.onSet = new Action();
     }
 
-    public getValue(): string {
+    protected _getValue(): string {
         return this.value;
     }
 
     public set(value: string): void{
-        this.applyChangeExternal(new StringChangeTypes.Set(value));
+        this.applyChangeExternal(new StringChangeTypes.Set(this,value));
     }
 
     protected notifyListeners(change: Change<string>, oldValue: string, newValue: string): void{
@@ -151,37 +165,48 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     onAppend: Action<[any], void>;
     onRemove: Action<[any], void>;
     protected value: ValueSet;
-    constructor(name:string,command_manager:CommandManager){
+    constructor(name:string,command_manager:StateManager,init_value?:any[]){
         super(name,command_manager);
         this.value = new ValueSet();
         this.onSet = new Action();
         this.onAppend = new Action();
         this.onRemove = new Action();
+        if (init_value !== undefined) // for _chatroom/topics
+            this.value.setValues(init_value);
     }
 
-    public getValue(): any[] {
+    protected _getValue(): any[] {
         return this.value.toArray();
     }
 
     public set(value: any[]): void{
-        this.applyChangeExternal(new SetChangeTypes.Set(value));
+        this.applyChangeExternal(new SetChangeTypes.Set(this,value));
     }
 
     public append(value: any): void{
-        this.applyChangeExternal(new SetChangeTypes.Append(value));
+        this.applyChangeExternal(new SetChangeTypes.Append(this,value));
     }
 
     public remove(value: any): void{
-        this.applyChangeExternal(new SetChangeTypes.Remove(value));
+        this.applyChangeExternal(new SetChangeTypes.Remove(this,value));
     }
 
     protected notifyListeners(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
         if (change instanceof SetChangeTypes.Set) {
             this.onSet.invoke(newValue.toArray());
-            for(const value of newValue.substract(oldValue))
-                this.onAppend.invoke(value);
-            for(const value of oldValue.substract(newValue))
-                this.onRemove.invoke(value);
+            // for(const value of newValue.substract(oldValue))
+            //     this.onRemove.invoke(value);
+            // for(const value of oldValue.substract(newValue))
+            //     this.onAppend.invoke(value);
+            //optimize:
+            console.log('oldValue',oldValue.toArray());
+            console.log('newValue',newValue.toArray());
+            for(const value of oldValue.toArray())
+                if (!newValue.has(value))
+                    this.onRemove.invoke(value);
+            for(const value of newValue.toArray())
+                if (!oldValue.has(value))
+                    this.onAppend.invoke(value);
         }
         else if (change instanceof SetChangeTypes.Append) {
             this.onSet.invoke(newValue.toArray());
@@ -192,4 +217,5 @@ export class SetTopic extends Topic<ValueSet,any[]>{
             this.onRemove.invoke(deepcopy(change.item));
         }
     }
+
 }
