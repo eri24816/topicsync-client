@@ -108,9 +108,8 @@ export abstract class Topic<T,TI=T>{
                 break;
             }
         }
-        this.commandManager.record(() => {
-            this.commandManager.applyChange(change,preview);
-        })
+        this.commandManager.applyChange(change,preview);
+    
     }
 
     public deserializeChange(changeDict: ChangeDict): Change<T> {

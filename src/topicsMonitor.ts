@@ -51,8 +51,6 @@ export class TopicsMonitor{
             defined(row.children[2]).textContent = JSON.stringify(value);
         });
         this.topics.set(topic_name, topic);
-
-        print('init topic:', topic_name, JSON.stringify(topic.getValue()), typeof topic.getValue());
         
         const row = document.createElement('tr');
         row.innerHTML = `<td>${topic_name}</td><td>${topic_type}</td><td>${JSON.stringify(topic.getValue())}</td>`;

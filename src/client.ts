@@ -24,10 +24,11 @@ export class ChatroomClient{
     private readonly onConnect: Action<[], void>;
     private readonly topicSet: SetTopic;
     private onConnectCalled: boolean;
+    private pendingSubscriptions: string[] = [];
 
     constructor(host: string){
         this.ws = new WebSocket(host);
-        this.stateManager = new StateManager(this.onActionProduced.bind(this));
+        this.stateManager = new StateManager(this.onActionProduced.bind(this), this.onActionFailed.bind(this));
         this.clientID = -1;
         this.requestPool = new Map<string, Request>; 
         this.servicePool = new Map<string, (data: any) => void>();
@@ -58,12 +59,29 @@ export class ChatroomClient{
         this.ws.send(message);
     }
 
-    private onActionProduced(recordedCommands: Change<any>[]) {
+    private sendSubscribe(topicName: string) {
+        if(this.stateManager.getIsRecording()) {
+            this.pendingSubscriptions.push(topicName);
+        }
+        else {
+            this.sendToServer('subscribe', { topic_name: topicName });
+        }
+    }
+
+    private onActionProduced(recordedCommands: Change<any>[],actionID: string) {
         const commandDicts = [];
         for (const command of recordedCommands) {
             commandDicts.push(command.serialize());
         }
-        this.sendToServer('action', { commands: commandDicts });
+        this.sendToServer('action', { commands: commandDicts, action_id: actionID });
+        for(const topicName of this.pendingSubscriptions) {
+            this.sendToServer('subscribe', { topic_name: topicName })
+        }
+        this.pendingSubscriptions = [];
+    }
+
+    private onActionFailed() {
+        this.pendingSubscriptions = [];
     }
 
     private handleHello({id}: {id: number}) {
@@ -91,14 +109,14 @@ export class ChatroomClient{
         request.on_response(response);
     }
 
-    private handleUpdate({changes}: {changes: any[]}) {
+    private handleUpdate({changes,action_id}: {changes: any[],action_id: string}) {
         const change_objects = [];
         for (const change_dict of changes) {
-            const topic = defined(this.stateManager.getTopic(change_dict['topic_name']));
+            const topic = this.stateManager.getTopic(change_dict['topic_name']);
             const change = topic.deserializeChange(change_dict);
             change_objects.push(change);
         }
-        this.stateManager.handleUpdate(change_objects);
+        this.stateManager.handleUpdate(change_objects,action_id);
 
         if (!this.onConnectCalled) {
             // when server sends the value of _chatroom/topics, client can do things about topics
@@ -126,7 +144,7 @@ export class ChatroomClient{
         }
         if (this.stateManager.existsTopic(topic_name)) {
             let topic = this.stateManager.subscribe(topic_name);
-            this.sendToServer('subscribe', { topic_name: topic_name});
+            this.sendSubscribe(topic_name);
             return topic as T;
         }
         throw new Error(`Topic ${topic_name} does not exist`);
@@ -143,7 +161,12 @@ export class ChatroomClient{
     } 
 
     public removeTopic(topic_name: string) {
-        this.topicSet.remove(topic_name);
+        for(const d of this.topicSet.getValue()) {
+            if (d.topic_name === topic_name) {       
+                this.topicSet.remove(d);
+                return;
+            }
+        }
     }
 
     public onConnected(callback: () => void) {
