@@ -1,10 +1,9 @@
 {
   "name": "chatroom-client",
-  "version": "1.0.0",
+  "version": "0.4.1",
   "main": "index.js",
   "license": "MIT",
   "devDependencies": {
-    "@types/uuid": "^9.0.1",
     "@web/dev-server": "^0.1.35",
     "ts-loader": "^9.4.2",
     "typescript": "^4.9.5",
@@ -13,13 +12,10 @@
     "webpack-dev-server": "^4.11.1"
   },
   "scripts": {
-    "ts-build": "tsc",
-    "ts-build:watch": "tsc -w",
-    "build": "webpack --mode production",
-    "build:dev": "webpack --mode development",
-    "build:watch": "npx webpack serve"
+    "testapp":"npx webpack serve --entry ./src/testApp.ts"
   },
   "dependencies": {
-    "deepcopy": "^2.1.0"
+    "deepcopy": "^2.1.0",
+    "@types/uuid": "^9.0.1"
   }
 }

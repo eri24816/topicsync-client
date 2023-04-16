@@ -1,7 +1,7 @@
 import { ChatroomClient } from "./client";
 import { SetTopic, Topic } from "./topic";
 import { defined } from "./utils";
-import { print } from "./dev_utils";
+import { print } from "./devUtils";
 
 export class TopicsMonitor{
     container: HTMLElement;
@@ -37,8 +37,8 @@ export class TopicsMonitor{
 
         this.container.appendChild(this.table);
         this.topicList = client.getTopic<SetTopic>('_chatroom/topics');
-        this.topicList.onAppend.addCallback(this.topicAdded.bind(this));
-        this.topicList.onRemove.addCallback(this.topicRemoved.bind(this));
+        this.topicList.onAppend.add(this.topicAdded.bind(this));
+        this.topicList.onRemove.add(this.topicRemoved.bind(this));
         for(const topic of this.topicList.getValue()){
             this.topicAdded(topic);
         }
@@ -46,7 +46,7 @@ export class TopicsMonitor{
 
     private topicAdded({ topic_name, topic_type }: { topic_name: string, topic_type: string }): void{
         const topic = this.client.getTopic(topic_name)
-        topic.onSet.addCallback((value) => {
+        topic.onSet.add((value) => {
             print('topic changed:', topic_name, JSON.stringify(value), typeof topic.getValue());
             defined(row.children[2]).textContent = JSON.stringify(value);
         });

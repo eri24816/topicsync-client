@@ -1,4 +1,4 @@
-import { print } from "./dev_utils";
+import { print } from "./devUtils";
 import { SetTopic, Topic } from "./topic";
 import { Change, SetChangeTypes } from "./topicChange";
 import { defined } from "./utils";
@@ -32,44 +32,44 @@ export class StateManager{
     this.topics.set(this.topicSet.getName(), this.topicSet);
   }
 
-  getTopic<T extends Topic<any>>(topic_name: string): T {
-    if (!this.topics.has(topic_name)) {
-      throw new Error(`Topic ${topic_name} is not in the subscription.`);
+  getTopic<T extends Topic<any>>(topicName: string): T {
+    if (!this.topics.has(topicName)) {
+      throw new Error(`Topic ${topicName} is not in the subscription.`);
     }
-    return defined(this.topics.get(topic_name)) as T;
+    return defined(this.topics.get(topicName)) as T;
   }
 
-  hasTopic(topic_name: string): boolean {
-    return this.topics.has(topic_name);
+  hasTopic(topicName: string): boolean {
+    return this.topics.has(topicName);
   }
 
-  existsTopic(topic_name: string): boolean {
+  existsTopic(topicName: string): boolean {
     //TODO: optimize
-    for (const topic_dict of this.topicSet.getValue()) {
-      if (topic_dict.topic_name === topic_name) {
+    for (const topicDict of this.topicSet.getValue()) {
+      if (topicDict.topic_name === topicName) {
         return true;
       }
     }
     return false;
   }
 
-  getTopicType(topic_name: string): string {
-    for (const topic_dict of this.topicSet.getValue()) {
-          if (topic_dict.topic_name === topic_name) {
-            return topic_dict.topic_type;
+  getTopicType(topicName: string): string {
+    for (const topicDict of this.topicSet.getValue()) {
+          if (topicDict.topic_name === topicName) {
+            return topicDict.topic_type;
           }
         }
-    throw new Error(`Topic ${topic_name} does not exist.`);
+    throw new Error(`Topic ${topicName} does not exist.`);
   }
 
-  subscribe(topic_name: string): Topic<any> {
-    if (!this.existsTopic(topic_name)) {
-      throw new Error(`Topic ${topic_name} does not exist.`);
+  subscribe(topicName: string): Topic<any> {
+    if (!this.existsTopic(topicName)) {
+      throw new Error(`Topic ${topicName} does not exist.`);
     }
-    let topic_type = this.getTopicType(topic_name);
-    let t = Topic.GetTypeFromName(topic_type)
-    let topic = new t(topic_name, this);
-    this.topics.set(topic_name, topic);
+    let topicType = this.getTopicType(topicName);
+    let t = Topic.GetTypeFromName(topicType)
+    let topic = new t(topicName, this);
+    this.topics.set(topicName, topic);
     return topic;
   }
 

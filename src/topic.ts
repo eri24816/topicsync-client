@@ -1,6 +1,6 @@
-import { Action, camel_to_snake, equalValue } from './utils';
+import { Action, camelToSnake, equalValue } from './utils';
 import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, SubclassOfChange } from './topicChange';
-import {StateManager} from './state_manager';
+import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
 
@@ -21,7 +21,7 @@ export abstract class Topic<T,TI=T>{
         return Topic.getTypeDict()[name];
     }
     static GetNameFromType(type: { new(name: string, commandManager: StateManager): Topic<any>; }): string{
-        return camel_to_snake(type.name.replace('Topic',''));
+        return camelToSnake(type.name.replace('Topic',''));
     }
     protected name: string;
     protected abstract value: T;
@@ -31,15 +31,15 @@ export abstract class Topic<T,TI=T>{
     public abstract readonly changeTypes: { [key: string]: SubclassOfChange<T> }
     public abstract onSet: Action<[TI],void>;
     private detached: boolean;
-    constructor(name:string,command_manager:StateManager){
+    constructor(name:string,commandManager:StateManager){
         this.name = name;
-        this.commandManager = command_manager;
+        this.commandManager = commandManager;
         this.validators = [];
         this.noPreviewChangeTypes = new Set();
         this.detached = false;
     }
     public getTypeName(): string{
-        return camel_to_snake(this.constructor.name.replace('Topic',''));
+        return camelToSnake(this.constructor.name.replace('Topic',''));
     }
 
     public getName(): string{
@@ -57,21 +57,21 @@ export abstract class Topic<T,TI=T>{
         this.validators.push(validator);
     }
 
-    public disablePreview(change_type?: SubclassOfChange<T>): void{
-        if (change_type === undefined) {
+    public disablePreview(changeType?: SubclassOfChange<T>): void{
+        if (changeType === undefined) {
             this.noPreviewChangeTypes = new Set(Object.values(this.changeTypes));
         }
         else {
-            this.noPreviewChangeTypes.add(change_type);
+            this.noPreviewChangeTypes.add(changeType);
         }
     }
 
-    public enablePreview(change_type?: SubclassOfChange<T>): void{
-        if (change_type === undefined) {
+    public enablePreview(changeType?: SubclassOfChange<T>): void{
+        if (changeType === undefined) {
             this.noPreviewChangeTypes.clear();
         }
         else {
-            this.noPreviewChangeTypes.delete(change_type);
+            this.noPreviewChangeTypes.delete(changeType);
         }
     }
     
@@ -102,8 +102,8 @@ export abstract class Topic<T,TI=T>{
         this.checkDetached();
         this.validateChangeAndGetResult(change);
         let preview = true;
-        for (const change_type of this.noPreviewChangeTypes) {
-            if (change instanceof change_type) {
+        for (const changeType of this.noPreviewChangeTypes) {
+            if (change instanceof changeType) {
                 preview = false;
                 break;
             }
@@ -135,8 +135,8 @@ export class StringTopic extends Topic<string>{
     }
     public onSet: Action<[string], void>;
     protected value: string;
-    constructor(name:string,command_manager:StateManager){
-        super(name,command_manager);
+    constructor(name:string,commandManager:StateManager){
+        super(name,commandManager);
         this.value = '';
         this.onSet = new Action();
     }
@@ -164,14 +164,14 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     onAppend: Action<[any], void>;
     onRemove: Action<[any], void>;
     protected value: ValueSet;
-    constructor(name:string,command_manager:StateManager,init_value?:any[]){
-        super(name,command_manager);
+    constructor(name:string,commandManager:StateManager,initValue?:any[]){
+        super(name,commandManager);
         this.value = new ValueSet();
         this.onSet = new Action();
         this.onAppend = new Action();
         this.onRemove = new Action();
-        if (init_value !== undefined) // for _chatroom/topics
-            this.value.setValues(init_value);
+        if (initValue !== undefined) // for _chatroom/topics
+            this.value.setValues(initValue);
     }
 
     protected _getValue(): any[] {

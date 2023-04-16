@@ -1,4 +1,4 @@
-export function camel_to_snake(str: string): string{
+export function camelToSnake(str: string): string{
     return str
         .replace(/(?<=[^^])([A-Z])/g, function ($1) { return '_'+$1.toLowerCase(); })
         .replace(/([A-Z])/g, function($1){return $1.toLowerCase();});
@@ -37,11 +37,11 @@ type Callback<ARGS extends any[], OUT> = (...args: ARGS) => OUT;
 export class Action<ARGS extends any[], OUT=void> {
     private _callbacks: Callback<ARGS, OUT>[] = [];
 
-    addCallback(callback: Callback<ARGS, OUT>) {
+    add(callback: Callback<ARGS, OUT>) {
         this._callbacks.push(callback);
     }
-
-    removeCallback(callback: Callback<ARGS, OUT>) {
+    
+    remove(callback: Callback<ARGS, OUT>) {
         const index = this._callbacks.indexOf(callback);
         if (index >= 0) {
             this._callbacks.splice(index, 1);

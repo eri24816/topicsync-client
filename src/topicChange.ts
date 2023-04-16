@@ -68,16 +68,16 @@ interface SetChangeDict extends ChangeDict {
 
 class SetChange<T> extends Change<T> {
   value: T;
-  old_value?: T; 
+  oldValue?: T; 
 
   constructor(topic:Topic<T> ,value: T, old_value?: T, id?: string) {
     super(topic,id);
     this.value = value;
-    this.old_value = old_value;
+    this.oldValue = old_value;
   }
 
   apply(oldValue: T): T {
-    this.old_value = deepcopy(oldValue);
+    this.oldValue = deepcopy(oldValue);
     return deepcopy(this.value);
   }
 
@@ -87,18 +87,18 @@ class SetChange<T> extends Change<T> {
       topic_type: this.topic.getTypeName(),
       type: "set",
       value: deepcopy(this.value),
-      old_value: deepcopy(this.old_value),
+      old_value: deepcopy(this.oldValue),
       id: this.id,
     };
   }
 
   inverse(): Change<T> {
-    if (this.old_value === undefined) {
+    if (this.oldValue === undefined) {
       throw new InvalidChangeException(
         "Cannot inverse the change before it is applied."
       );
     }
-    return new SetChange<T>(this.topic,deepcopy(this.old_value), deepcopy(this.value));
+    return new SetChange<T>(this.topic,deepcopy(this.oldValue), deepcopy(this.value));
   }
 }
 
@@ -109,14 +109,14 @@ export namespace StringChangeTypes  {
 export namespace SetChangeTypes  {
   export class Set extends Change<ValueSet> {
     value: ValueSet;
-    old_value?: ValueSet;
+    oldValue?: ValueSet;
     constructor(topic:Topic<ValueSet,any>, value: any[], old_value?: any[], id?: string) {
       super(topic,id);
       this.value = new ValueSet(value);
-      this.old_value = old_value ? new ValueSet(old_value) : undefined;
+      this.oldValue = old_value ? new ValueSet(old_value) : undefined;
     }
     apply(oldValue: ValueSet): ValueSet {
-      this.old_value = oldValue.copy();
+      this.oldValue = oldValue.copy();
       return this.value.copy();
     }
     serialize(): ChangeDict {
@@ -125,15 +125,15 @@ export namespace SetChangeTypes  {
         topic_type: this.topic.getTypeName(),
         type: "set",
         value: this.value.toArray(),
-        old_value: this.old_value?.toArray(),
+        old_value: this.oldValue?.toArray(),
         id: this.id,
       };
     }
     inverse(): Change<ValueSet> {
-      if (this.old_value === undefined) {
+      if (this.oldValue === undefined) {
         throw new InvalidChangeException("Cannot inverse the change before it is applied.");
       }
-      return new Set(this.topic,this.old_value.toArray(), this.value.toArray()); 
+      return new Set(this.topic,this.oldValue.toArray(), this.value.toArray()); 
     }
   }
 

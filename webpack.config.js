@@ -8,14 +8,10 @@ module.exports = {
   watch: true,
   module: {
     rules: [
-            
-    
       {
         test: /\.ts$/i,
         loader: "ts-loader"
       }
-    
-            
     ]
   },
   devServer: {
