@@ -1,7 +1,7 @@
 import { print } from "./devUtils";
 import { StateManager } from "./stateManager";
 import { SetTopic, Topic } from "./topic";
-import { Change } from "./topicChange";
+import { Change } from "./change";
 import { Action, defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
 

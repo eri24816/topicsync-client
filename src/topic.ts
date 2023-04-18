@@ -1,5 +1,5 @@
 import { Action, camelToSnake, equalValue } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, SubclassOfChange } from './topicChange';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, SubclassOfChange } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';

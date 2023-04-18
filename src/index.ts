@@ -1,4 +1,4 @@
 export {ChatroomClient} from './client';
 export * from './topic';
-export * from './topicChange';
+export * from './change';
 export { TopicsMonitor } from './topicsMonitor';

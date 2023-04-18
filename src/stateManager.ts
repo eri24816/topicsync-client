@@ -1,6 +1,6 @@
 import { print } from "./devUtils";
 import { SetTopic, Topic } from "./topic";
-import { Change, SetChangeTypes } from "./topicChange";
+import { Change, SetChangeTypes } from "./change";
 import { defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
 
