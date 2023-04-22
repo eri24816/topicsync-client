@@ -94,9 +94,7 @@ class SetChange<T> extends Change<T> {
 
   inverse(): Change<T> {
     if (this.oldValue === undefined) {
-      throw new InvalidChangeException(
-        "Cannot inverse the change before it is applied."
-      );
+      throw new InvalidChangeException(`Cannot inverse SetChange before it is applied. Topic: ${this.topic.getName()}`);
     }
     return new SetChange<T>(this.topic,deepcopy(this.oldValue), deepcopy(this.value));
   }
@@ -131,7 +129,7 @@ export namespace SetChangeTypes  {
     }
     inverse(): Change<ValueSet> {
       if (this.oldValue === undefined) {
-        throw new InvalidChangeException("Cannot inverse the change before it is applied.");
+        throw new InvalidChangeException(`Cannot inverse the change before it is applied. Topic: ${this.topic.getName()}`);
       }
       return new Set(this.topic,this.oldValue.toArray(), this.value.toArray()); 
     }
@@ -147,7 +145,7 @@ export namespace SetChangeTypes  {
     apply(oldValue: ValueSet): ValueSet {
       const newValue = oldValue.copy();
       if (!newValue.add(this.item))
-        throw new InvalidChangeException(`Item ${this.item} already exists in set.`)
+        throw new InvalidChangeException(`Item ${JSON.stringify(this.item)} already exists in set. Topic: ${this.topic.getName()}`)
       return newValue;
     }
     serialize(): ChangeDict {
@@ -172,7 +170,7 @@ export namespace SetChangeTypes  {
     apply(oldValue: ValueSet): ValueSet {
       const newValue = oldValue.copy();
       if (!newValue.delete(this.item))
-        throw new InvalidChangeException(`Item ${this.item} not found in set.`);
+        throw new InvalidChangeException(`Item ${JSON.stringify(this.item)} not found in set. Topic: ${this.topic.getName()}`);
       return newValue;
     }
     serialize(): ChangeDict {

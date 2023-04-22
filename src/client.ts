@@ -114,7 +114,9 @@ export class ChatroomClient{
     private handleUpdate({changes,action_id:actionId}: {changes: any[],action_id: string}) {
         const changeObjects = [];
         for (const changeDict of changes) {
-            const topic = this.stateManager.getTopic(changeDict['topic_name']);
+            if (!this.stateManager.existsTopic(changeDict.topic_name))
+                continue; // This could happen when client has just unsubscribed a topic
+            const topic = this.stateManager.getTopic(changeDict.topic_name);
             const change = topic.deserializeChange(changeDict);
             changeObjects.push(change);
         }
@@ -158,17 +160,23 @@ export class ChatroomClient{
             topicType = Topic.GetNameFromType(topicType);
         }
         this.topicSet.append({topic_name: topicName, topic_type: topicType});
+        //? this.stateManager.subscribe(topicName);
         let topic = this.stateManager.getTopic(topicName);
         return topic as T;
     } 
 
     public removeTopic(topicName: string) {
+        let topic = this.stateManager.getTopic(topicName);
         for(const d of this.topicSet.getValue()) {
-            if (d.topic_name === topicName) {       
-                this.topicSet.remove(d);
+            if (d.topic_name === topicName) {    
+                this.stateManager.record(()=>{
+                    topic.setToDefault();
+                    this.topicSet.remove(d);
+                });
                 return;
             }
         }
+        throw new Error(`Topic ${topicName} does not exist`);
     }
 
     public onConnected(callback: () => void) {

@@ -11,6 +11,10 @@ interface ChangeDict {
   [key: string]: any;
 }
 
+let defaultValues: { [key: string]: any } = {
+    string: '',
+    set: [],
+};
 
 export abstract class Topic<T,TI=T>{
     static getTypeDict(): {[key:string]:{ new(name: string, commandManager: StateManager): Topic<any>; }}
@@ -73,6 +77,12 @@ export abstract class Topic<T,TI=T>{
         else {
             this.noPreviewChangeTypes.delete(changeType);
         }
+    }
+
+    public abstract set(value:TI): void;
+
+    public setToDefault(): void{
+        this.set(defaultValues[this.getTypeName()] as TI);
     }
     
     protected abstract notifyListeners(change: Change<T>, oldValue: T, newValue: T): void;
@@ -193,13 +203,6 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     protected notifyListeners(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
         if (change instanceof SetChangeTypes.Set) {
             this.onSet.invoke(newValue.toArray());
-            // for(const value of newValue.substract(oldValue))
-            //     this.onRemove.invoke(value);
-            // for(const value of oldValue.substract(newValue))
-            //     this.onAppend.invoke(value);
-            //optimize:
-            console.log('oldValue',oldValue.toArray());
-            console.log('newValue',newValue.toArray());
             for(const value of oldValue.toArray())
                 if (!newValue.has(value))
                     this.onRemove.invoke(value);

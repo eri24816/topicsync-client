@@ -28,6 +28,12 @@ export class StateManager{
     this.blockApplyChange = false;
 
     this.topicSet = new SetTopic("_chatroom/topics", this,[{topic_name:"_chatroom/topics",topic_type:"set"}]);
+    this.topicSet.onRemove.add((item)=>{
+      if (this.topics.has(item.topic_name)) {
+        this.topics.delete(item.topic_name);
+      }
+    });
+    
       
     this.topics.set(this.topicSet.getName(), this.topicSet);
   }
@@ -79,7 +85,8 @@ export class StateManager{
   
   record(callback = () => {}): void{
     if (this.isRecording) {
-      throw new Error("Cannot call record() while recording.");
+      callback();
+      return;
     }
 
     this.isRecording = true;
@@ -150,7 +157,7 @@ export class StateManager{
     this.blockApplyChangeContext(() => {
       for (const change of transition){
 
-        this.checkTopicRemoval(change);
+        //this.checkTopicRemoval(change);
 
         if (this.allPreview.length == 0){
           change.execute();
@@ -173,14 +180,14 @@ export class StateManager{
     });
   }
 
-  private checkTopicRemoval(change: Change<any>): void{
-    if (change.topic === this.topicSet){
-      if (change instanceof SetChangeTypes.Remove){
-        defined(this.topics.get(change.item.topic_name)).setDetached();
-        this.topics.delete(change.item.topic_name);
-      }
-    }
-  }
+  // private checkTopicRemoval(change: Change<any>): void{
+  //   if (change.topic === this.topicSet){
+  //     if (change instanceof SetChangeTypes.Remove){
+  //       defined(this.topics.get(change.item.topic_name)).setDetached();
+  //       this.topics.delete(change.item.topic_name);
+  //     }
+  //   }
+  // }
 
   handleReject(): void{
     /*Recieve a reject from the server.*/

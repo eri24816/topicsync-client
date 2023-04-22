@@ -47,7 +47,8 @@ export class TopicsMonitor{
     private topicAdded({ topic_name, topic_type }: { topic_name: string, topic_type: string }): void{
         const topic = this.client.getTopic(topic_name)
         topic.onSet.add((value) => {
-            print('topic changed:', topic_name, JSON.stringify(value), typeof topic.getValue());
+            //print('topic changed:', topic_name, JSON.stringify(value));
+            print(`${topic_name} changed to ${JSON.stringify(value)}`);
             defined(row.children[2]).textContent = JSON.stringify(value);
         });
         this.topics.set(topic_name, topic);
