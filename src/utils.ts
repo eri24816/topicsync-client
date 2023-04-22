@@ -56,3 +56,5 @@ export class Action<ARGS extends any[], OUT=void> {
 export function equalValue(a: any, b: any) {
     return JSON.stringify(a) === JSON.stringify(b);
 }
+
+export type Constructor<T> = new (...args: any[]) => T;

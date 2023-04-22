@@ -1,7 +1,7 @@
 import { print } from "./devUtils";
 import { SetTopic, Topic } from "./topic";
 import { Change, SetChangeTypes } from "./change";
-import { defined } from "./utils";
+import { Constructor, defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
 
 export class StateManager{
@@ -15,7 +15,6 @@ export class StateManager{
     private recursionDepth: number;
     private blockApplyChange: boolean;
 
-    private topicSet: SetTopic;
     constructor(onActionProduced: (action:Change<any>[],actionID:string) => void, onActionFailed: () => void) {
         this.topics = new Map<string, Topic<any>>();
         this.allPreview = [];
@@ -26,16 +25,6 @@ export class StateManager{
         this.onActionFailed = onActionFailed;
         this.recursionDepth = 0;
         this.blockApplyChange = false;
-
-        this.topicSet = new SetTopic("_chatroom/topics", this,[{topic_name:"_chatroom/topics",topic_type:"set"}]);
-        this.topicSet.onRemove.add((item)=>{
-            if (this.topics.has(item.topic_name)) {
-                this.topics.delete(item.topic_name);
-            }
-        });
-        
-            
-        this.topics.set(this.topicSet.getName(), this.topicSet);
     }
 
     getTopic<T extends Topic<any>>(topicName: string): T {
@@ -49,34 +38,29 @@ export class StateManager{
         return this.topics.has(topicName);
     }
 
-    existsTopic(topicName: string): boolean {
-        //TODO: optimize
-        for (const topicDict of this.topicSet.getValue()) {
-            if (topicDict.topic_name === topicName) {
-                return true;
-            }
+    addSubsciption<T extends Topic<any>>(topicName: string, topicType: string|Constructor<T>): T {
+        if (this.topics.has(topicName)) {
+            throw new Error(`Topic ${topicName} is already in the subscription.`);
         }
-        return false;
-    }
-
-    getTopicType(topicName: string): string {
-        for (const topicDict of this.topicSet.getValue()) {
-                    if (topicDict.topic_name === topicName) {
-                        return topicDict.topic_type;
-                    }
-                }
-        throw new Error(`Topic ${topicName} does not exist.`);
-    }
-
-    subscribe(topicName: string): Topic<any> {
-        if (!this.existsTopic(topicName)) {
-            throw new Error(`Topic ${topicName} does not exist.`);
+        
+        let t;
+        if (typeof topicType === 'string') {
+            t = Topic.GetTypeFromName(topicType);
         }
-        let topicType = this.getTopicType(topicName);
-        let t = Topic.GetTypeFromName(topicType)
+        else {
+            t = topicType;
+        }
         let topic = new t(topicName, this);
         this.topics.set(topicName, topic);
-        return topic;
+        return topic as T;
+    }
+
+    removeSubscription(topicName: string): void {
+        if (!this.topics.has(topicName)) {
+            throw new Error(`Topic ${topicName} is not in the subscription.`);
+        }
+        this.getTopic(topicName).setDetached();
+        this.topics.delete(topicName);
     }
 
     getIsRecording(): boolean{

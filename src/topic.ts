@@ -1,5 +1,5 @@
 import { Action, camelToSnake, equalValue } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, SubclassOfChange } from './change';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
@@ -31,8 +31,8 @@ export abstract class Topic<T,TI=T>{
     protected abstract value: T;
     private commandManager: StateManager;
     private validators: Validator<T>[];
-    private noPreviewChangeTypes: Set<SubclassOfChange<T>>;
-    public abstract readonly changeTypes: { [key: string]: SubclassOfChange<T> }
+    private noPreviewChangeTypes: Set<ConstructorOfChange<T>>;
+    public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T> }
     public abstract onSet: Action<[TI],void>;
     private detached: boolean;
     constructor(name:string,commandManager:StateManager){
@@ -61,7 +61,7 @@ export abstract class Topic<T,TI=T>{
         this.validators.push(validator);
     }
 
-    public disablePreview(changeType?: SubclassOfChange<T>): void{
+    public disablePreview(changeType?: ConstructorOfChange<T>): void{
         if (changeType === undefined) {
             this.noPreviewChangeTypes = new Set(Object.values(this.changeTypes));
         }
@@ -70,7 +70,7 @@ export abstract class Topic<T,TI=T>{
         }
     }
 
-    public enablePreview(changeType?: SubclassOfChange<T>): void{
+    public enablePreview(changeType?: ConstructorOfChange<T>): void{
         if (changeType === undefined) {
             this.noPreviewChangeTypes.clear();
         }
@@ -129,12 +129,13 @@ export abstract class Topic<T,TI=T>{
     }
 
     public setDetached(): void{
+        // When the topic is detached from the server, it cannot be used anymore.
         this.detached = true;
     }
 
     private checkDetached(): void{
         if (this.detached) {
-            throw new Error(`The topic ${this.name} has been removed. You cannot use it anymore.`);
+            throw new Error(`The topic ${this.name} has been removed or unsubscribed. You cannot use it anymore.`);
         }
     }
 }

@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { ValueSet } from "./collection";
-export type SubclassOfChange<T> = new (...args: any[]) => Change<T>
+export type ConstructorOfChange<T> = new (...args: any[]) => Change<T>
 
 export class InvalidChangeException extends Error {
     constructor(message?: string) {
@@ -38,7 +38,7 @@ export abstract class Change<T> {
 
     public static deserialize(
         topic: Topic<any>,
-        changeType: SubclassOfChange<any>,
+        changeType: ConstructorOfChange<any>,
         changeDict: ChangeDict
     ): Change<any> {
         const { type, ...rest } = changeDict;

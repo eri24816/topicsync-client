@@ -12,8 +12,8 @@ chatroom.onConnected(() => {
         print(response);
     });
 
-    const a = chatroom.getTopic<StringTopic>('a');
-    const topicSet = chatroom.getTopic<SetTopic>('_chatroom/topics');
+    const a = chatroom.getTopic('a',StringTopic);
+    const topicSet = chatroom.getTopic('_chatroom/topics',SetTopic);
     topicSet.onAppend.add((topic) => {
         print('topic added:', topic);
     });

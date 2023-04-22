@@ -2,7 +2,7 @@ import { print } from "./devUtils";
 import { StateManager } from "./stateManager";
 import { SetTopic, Topic } from "./topic";
 import { Change } from "./change";
-import { Action, defined } from "./utils";
+import { Action, Constructor, defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
 
 class Request{
@@ -25,6 +25,7 @@ export class ChatroomClient{
     private readonly topicSet: SetTopic;
     private onConnectCalled: boolean;
     private pendingSubscriptions: string[] = [];
+    
 
     constructor(host: string){
         this.ws = new WebSocket(host);
@@ -39,8 +40,7 @@ export class ChatroomClient{
             ['update', this.handleUpdate.bind(this)],
             ['reject', this.handleReject.bind(this)],
         ]);
-        this.topicSet = this.stateManager.getTopic<SetTopic>("_chatroom/topics");
-
+        this.topicSet = this.stateManager.addSubsciption("_chatroom/topics",SetTopic);
         this.onConnect = new Action<[], void>();
         this.onConnectCalled = false;
         
@@ -114,8 +114,8 @@ export class ChatroomClient{
     private handleUpdate({changes,action_id:actionId}: {changes: any[],action_id: string}) {
         const changeObjects = [];
         for (const changeDict of changes) {
-            if (!this.stateManager.existsTopic(changeDict.topic_name))
-                continue; // This could happen when client has just unsubscribed a topic
+            if (!this.stateManager.hasTopic(changeDict.topic_name))
+                continue; // This could happen when client subscribed a topic while the update message was in flight.
             const topic = this.stateManager.getTopic(changeDict.topic_name);
             const change = topic.deserializeChange(changeDict);
             changeObjects.push(change);
@@ -139,44 +139,45 @@ export class ChatroomClient{
         this.requestPool.set(id, request);
         this.sendToServer('request', { service_name: serviceName, args: args, request_id: id });
     }
-
-    public getTopic<T extends Topic<any>>(topicName: string): T {
-
+    
+    /**
+     * Get a topic object. Subscribe to the topic if it is not subscribed.
+     * @param topicName The topic's name.
+     * @param topicType The topic's type. Required if the topic is not subscribed.
+     * @returns The topic object.
+     */
+    public getTopic<T extends Topic<any>>(topicName: string,topicType?: string|Constructor<T>): T {
         if (this.stateManager.hasTopic(topicName)) {
             const topic = this.stateManager.getTopic(topicName);
             return topic as T;
         }
-        if (this.stateManager.existsTopic(topicName)) {
-            let topic = this.stateManager.subscribe(topicName);
-            this.sendSubscribe(topicName);
-            return topic as T;
-        }
-        throw new Error(`Topic ${topicName} does not exist`);
-    }
-
-    //? Should client be able to create and remove topics?
-    public addTopic<T extends Topic<any>>(topicName: string, topicType: string|{ new(name: string, commandManager: StateManager): T; }): T {
-        if (typeof topicType !== 'string') {
-            topicType = Topic.GetNameFromType(topicType);
-        }
-        this.topicSet.append({topic_name: topicName, topic_type: topicType});
-        //? this.stateManager.subscribe(topicName);
-        let topic = this.stateManager.getTopic(topicName);
-        return topic as T;
-    } 
-
-    public removeTopic(topicName: string) {
-        let topic = this.stateManager.getTopic(topicName);
-        for(const d of this.topicSet.getValue()) {
-            if (d.topic_name === topicName) {    
-                this.stateManager.record(()=>{
-                    topic.setToDefault();
-                    this.topicSet.remove(d);
-                });
-                return;
+        // Try to query topic type from this.topicSet
+        if (topicType === undefined){
+            for (const topic_info of this.topicSet.getValue()){
+                if (topic_info.topic_name === topicName){
+                    topicType = topic_info.topic_type;
+                    break;
+                }
+            }
+            if (topicType === undefined){
+                throw new Error(`Type of topic ${topicName} is unknown. Please specify the topic type.`);
             }
         }
-        throw new Error(`Topic ${topicName} does not exist`);
+        let topic = this.stateManager.addSubsciption(topicName,topicType);
+        this.sendSubscribe(topicName);
+        return topic as T;
+    }
+
+    /**
+     * Unsubscribe from a topic.
+     * The topic will not ever receive updates from the server. The topic will be marked as detached.
+     * @param topicName The topic's name.
+     */
+    public unsubscribe(topicName: string) {
+        if(topicName==="_chatroom/topics")
+            throw new Error(`Cannot unsubscribe from topic ${topicName}`);
+        this.stateManager.removeSubscription(topicName);
+        this.sendToServer('unsubscribe', { topic_name: topicName });
     }
 
     public onConnected(callback: () => void) {
