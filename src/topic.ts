@@ -1,5 +1,5 @@
 import { Action, camelToSnake, equalValue } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange } from './change';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
@@ -19,7 +19,12 @@ let defaultValues: { [key: string]: any } = {
 export abstract class Topic<T,TI=T>{
     static getTypeDict(): {[key:string]:{ new(name: string, commandManager: StateManager): Topic<any>; }}
     {
-        return {string: StringTopic, set: SetTopic}
+        return {
+            string: StringTopic,
+            int: IntTopic,
+            float: FloatTopic,
+            set: SetTopic,
+        }
     }
     static GetTypeFromName(name: string): { new(name: string, commandManager: StateManager): Topic<any>; }{
         return Topic.getTypeDict()[name];
@@ -161,6 +166,66 @@ export class StringTopic extends Topic<string>{
     }
 
     protected notifyListeners(change: Change<string>, oldValue: string, newValue: string): void{
+        this.onSet.invoke(newValue);
+    }
+}
+
+export class IntTopic extends Topic<number>{
+    public changeTypes = {
+        'set': IntChangeTypes.Set,
+        'add': IntChangeTypes.Add
+    }
+    public onSet: Action<[number], void>;
+    protected value: number;
+    constructor(name:string,commandManager:StateManager){
+        super(name,commandManager);
+        this.value = 0;
+        this.onSet = new Action();
+    }
+
+    protected _getValue(): number {
+        return this.value;
+    }
+
+    public set(value: number): void{
+        this.applyChangeExternal(new IntChangeTypes.Set(this,value));
+    }
+
+    public add(value: number): void{
+        this.applyChangeExternal(new IntChangeTypes.Add(this,value));
+    }
+
+    protected notifyListeners(change: Change<number>, oldValue: number, newValue: number): void{
+        this.onSet.invoke(newValue);
+    }
+}
+
+export class FloatTopic extends Topic<number>{
+    public changeTypes = {
+        'set': FloatChangeTypes.Set,
+        'add': FloatChangeTypes.Add
+    }
+    public onSet: Action<[number], void>;
+    protected value: number;
+    constructor(name:string,commandManager:StateManager){
+        super(name,commandManager);
+        this.value = 0;
+        this.onSet = new Action();
+    }
+
+    protected _getValue(): number {
+        return this.value;
+    }
+
+    public set(value: number): void{
+        this.applyChangeExternal(new FloatChangeTypes.Set(this,value));
+    }
+
+    public add(value: number): void{
+        this.applyChangeExternal(new FloatChangeTypes.Add(this,value));
+    }
+
+    protected notifyListeners(change: Change<number>, oldValue: number, newValue: number): void{
         this.onSet.invoke(newValue);
     }
 }

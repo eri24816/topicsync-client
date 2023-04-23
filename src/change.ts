@@ -45,6 +45,14 @@ export abstract class Change<T> {
         switch (changeType) {
             case StringChangeTypes.Set:
                 return new StringChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
+            case IntChangeTypes.Set:
+                return new IntChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
+            case IntChangeTypes.Add:
+                return new IntChangeTypes.Add(topic,rest.value, rest.id);
+            case FloatChangeTypes.Set:
+                return new FloatChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
+            case FloatChangeTypes.Add:
+                return new FloatChangeTypes.Add(topic,rest.value, rest.id);
             case SetChangeTypes.Set:
                 return new SetChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
             case SetChangeTypes.Append:
@@ -102,6 +110,58 @@ class SetChange<T> extends Change<T> {
 
 export namespace StringChangeTypes    {
     export const Set = SetChange<string>;
+}
+
+export namespace IntChangeTypes    {
+    export const Set = SetChange<number>;
+    export class Add extends Change<number> {
+        value: number;
+        constructor(topic:Topic<number>, value: number, id?: string) {
+            super(topic,id);
+            this.value = value;
+        }
+        apply(oldValue: number): number {
+            return oldValue + this.value;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "add",
+                value: this.value,
+                id: this.id,
+            };
+        }
+        inverse(): Change<number> {
+            return new Add(this.topic,-this.value);
+        }
+    }
+}
+
+export namespace FloatChangeTypes    {
+    export const Set = SetChange<number>;
+    export class Add extends Change<number> {
+        value: number;
+        constructor(topic:Topic<number>, value: number, id?: string) {
+            super(topic,id);
+            this.value = value;
+        }
+        apply(oldValue: number): number {
+            return oldValue + this.value;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "add",
+                value: this.value,
+                id: this.id,
+            };
+        }
+        inverse(): Change<number> {
+            return new Add(this.topic,-this.value);
+        }
+    }
 }
 
 export namespace SetChangeTypes    {
