@@ -108,6 +108,10 @@ class SetChange<T> extends Change<T> {
     }
 }
 
+export namespace GenericChangeTypes    {
+    export const Set = SetChange;
+}
+
 export namespace StringChangeTypes    {
     export const Set = SetChange<string>;
 }

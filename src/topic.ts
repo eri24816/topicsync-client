@@ -1,5 +1,5 @@
 import { Action, camelToSnake, equalValue } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes } from './change';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
@@ -20,6 +20,7 @@ export abstract class Topic<T,TI=T>{
     static getTypeDict(): {[key:string]:{ new(name: string, commandManager: StateManager): Topic<any>; }}
     {
         return {
+            generic: GenericTopic,
             string: StringTopic,
             int: IntTopic,
             float: FloatTopic,
@@ -142,6 +143,30 @@ export abstract class Topic<T,TI=T>{
         if (this.detached) {
             throw new Error(`The topic ${this.name} has been removed or unsubscribed. You cannot use it anymore.`);
         }
+    }
+}
+
+export class GenericTopic<T> extends Topic<T>{
+    public changeTypes = {
+        'set': GenericChangeTypes.Set<T>,
+    }
+    public onSet: Action<[T], void>;
+    protected value!: T
+    constructor(name:string,commandManager:StateManager){
+        super(name,commandManager);
+        this.onSet = new Action();
+    }
+
+    protected _getValue(): T {
+        return this.value;
+    }
+
+    public set(value: T): void{
+        this.applyChangeExternal(new GenericChangeTypes.Set(this,value));
+    }
+
+    protected notifyListeners(change: Change<T>, oldValue: T, newValue: T): void{
+        this.onSet.invoke(newValue);
     }
 }
 
