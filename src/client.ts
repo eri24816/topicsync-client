@@ -133,7 +133,7 @@ export class ChatroomClient{
         this.stateManager.handleReject();
     }
 
-    public makeRequest(serviceName: string, args: any, onResponse : (response: any)=>void): void {
+    public makeRequest(serviceName: string, args: any, onResponse : (response: any)=>void = ()=>{}): void {
         const id = uuidv4();
         const request = new Request(id, onResponse);
         this.requestPool.set(id, request);

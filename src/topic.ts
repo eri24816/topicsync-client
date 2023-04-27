@@ -39,7 +39,8 @@ export abstract class Topic<T,TI=T>{
     private validators: Validator<T>[];
     private noPreviewChangeTypes: Set<ConstructorOfChange<T>>;
     public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T> }
-    public abstract onSet: Action<[TI],void>;
+    public onSet = new Action<[TI],void>;
+    public onSet2 = new Action<[TI,TI],void>;
     private detached: boolean;
     constructor(name:string,commandManager:StateManager){
         this.name = name;
@@ -91,7 +92,12 @@ export abstract class Topic<T,TI=T>{
         this.set(defaultValues[this.getTypeName()] as TI);
     }
     
-    protected abstract notifyListeners(change: Change<T>, oldValue: T, newValue: T): void;
+    protected notifyListeners(change: Change<T>, oldValue: TI, newValue: TI): void{
+        this.onSet.invoke(this.getValue());
+        this.onSet2.invoke(oldValue,this.getValue());
+    }
+
+    protected notifyListenersT(change: Change<T>, oldValue: T, newValue: T): void{}
 
     private validateChangeAndGetResult(change: Change<T>): T{
         const oldValue = this.value;
@@ -108,10 +114,13 @@ export abstract class Topic<T,TI=T>{
     }
 
     public applyChange(change: Change<T>): void{
-        const oldValue = this.value;
-        const newValue = this.validateChangeAndGetResult(change);
-        this.value = newValue;
-        this.notifyListeners(change, oldValue, newValue);
+        const oldValueTI = this.getValue();
+        const oldValueT = this.value;
+        this.value = this.validateChangeAndGetResult(change);
+        const newValueTI = this.getValue();
+        const newValueT = this.value;
+        this.notifyListenersT(change, oldValueT, newValueT);
+        this.notifyListeners(change, oldValueTI, newValueTI);
     }
 
     public applyChangeExternal(change: Change<T>): void{
@@ -150,11 +159,9 @@ export class GenericTopic<T> extends Topic<T>{
     public changeTypes = {
         'set': GenericChangeTypes.Set<T>,
     }
-    public onSet: Action<[T], void>;
     protected value!: T
     constructor(name:string,commandManager:StateManager){
         super(name,commandManager);
-        this.onSet = new Action();
     }
 
     protected _getValue(): T {
@@ -164,22 +171,16 @@ export class GenericTopic<T> extends Topic<T>{
     public set(value: T): void{
         this.applyChangeExternal(new GenericChangeTypes.Set(this,value));
     }
-
-    protected notifyListeners(change: Change<T>, oldValue: T, newValue: T): void{
-        this.onSet.invoke(newValue);
-    }
 }
 
 export class StringTopic extends Topic<string>{
     public changeTypes = {
         'set': StringChangeTypes.Set,
     }
-    public onSet: Action<[string], void>;
     protected value: string;
     constructor(name:string,commandManager:StateManager){
         super(name,commandManager);
         this.value = '';
-        this.onSet = new Action();
     }
 
     protected _getValue(): string {
@@ -189,10 +190,6 @@ export class StringTopic extends Topic<string>{
     public set(value: string): void{
         this.applyChangeExternal(new StringChangeTypes.Set(this,value));
     }
-
-    protected notifyListeners(change: Change<string>, oldValue: string, newValue: string): void{
-        this.onSet.invoke(newValue);
-    }
 }
 
 export class IntTopic extends Topic<number>{
@@ -200,12 +197,10 @@ export class IntTopic extends Topic<number>{
         'set': IntChangeTypes.Set,
         'add': IntChangeTypes.Add
     }
-    public onSet: Action<[number], void>;
     protected value: number;
     constructor(name:string,commandManager:StateManager){
         super(name,commandManager);
         this.value = 0;
-        this.onSet = new Action();
     }
 
     protected _getValue(): number {
@@ -219,10 +214,6 @@ export class IntTopic extends Topic<number>{
     public add(value: number): void{
         this.applyChangeExternal(new IntChangeTypes.Add(this,value));
     }
-
-    protected notifyListeners(change: Change<number>, oldValue: number, newValue: number): void{
-        this.onSet.invoke(newValue);
-    }
 }
 
 export class FloatTopic extends Topic<number>{
@@ -230,12 +221,10 @@ export class FloatTopic extends Topic<number>{
         'set': FloatChangeTypes.Set,
         'add': FloatChangeTypes.Add
     }
-    public onSet: Action<[number], void>;
     protected value: number;
     constructor(name:string,commandManager:StateManager){
         super(name,commandManager);
         this.value = 0;
-        this.onSet = new Action();
     }
 
     protected _getValue(): number {
@@ -249,10 +238,6 @@ export class FloatTopic extends Topic<number>{
     public add(value: number): void{
         this.applyChangeExternal(new FloatChangeTypes.Add(this,value));
     }
-
-    protected notifyListeners(change: Change<number>, oldValue: number, newValue: number): void{
-        this.onSet.invoke(newValue);
-    }
 }
 
 export class SetTopic extends Topic<ValueSet,any[]>{
@@ -261,14 +246,12 @@ export class SetTopic extends Topic<ValueSet,any[]>{
         'append': SetChangeTypes.Append,
         'remove': SetChangeTypes.Remove,
     }
-    onSet: Action<[any[]], void>;
     onAppend: Action<[any], void>;
     onRemove: Action<[any], void>;
     protected value: ValueSet;
     constructor(name:string,commandManager:StateManager,initValue?:any[]){
         super(name,commandManager);
         this.value = new ValueSet();
-        this.onSet = new Action();
         this.onAppend = new Action();
         this.onRemove = new Action();
         if (initValue !== undefined) // for _chatroom/topics
@@ -291,9 +274,8 @@ export class SetTopic extends Topic<ValueSet,any[]>{
         this.applyChangeExternal(new SetChangeTypes.Remove(this,value));
     }
 
-    protected notifyListeners(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
+    protected notifyListenersT(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
         if (change instanceof SetChangeTypes.Set) {
-            this.onSet.invoke(newValue.toArray());
             for(const value of oldValue.toArray())
                 if (!newValue.has(value))
                     this.onRemove.invoke(value);
@@ -302,11 +284,9 @@ export class SetTopic extends Topic<ValueSet,any[]>{
                     this.onAppend.invoke(value);
         }
         else if (change instanceof SetChangeTypes.Append) {
-            this.onSet.invoke(newValue.toArray());
             this.onAppend.invoke(deepcopy(change.item));
         }
         else if (change instanceof SetChangeTypes.Remove) {
-            this.onSet.invoke(newValue.toArray());
             this.onRemove.invoke(deepcopy(change.item));
         }
     }
