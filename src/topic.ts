@@ -1,5 +1,5 @@
 import { Action, camelToSnake, equalValue } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes } from './change';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes, EventChangeTypes } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
@@ -11,11 +11,6 @@ interface ChangeDict {
   [key: string]: any;
 }
 
-let defaultValues: { [key: string]: any } = {
-    string: '',
-    set: [],
-};
-
 export abstract class Topic<T,TI=T>{
     static getTypeDict(): {[key:string]:{ new(name: string, commandManager: StateManager): Topic<any>; }}
     {
@@ -25,6 +20,7 @@ export abstract class Topic<T,TI=T>{
             int: IntTopic,
             float: FloatTopic,
             set: SetTopic,
+            event: EventTopic,
         }
     }
     static GetTypeFromName(name: string): { new(name: string, commandManager: StateManager): Topic<any>; }{
@@ -87,10 +83,6 @@ export abstract class Topic<T,TI=T>{
     }
 
     public abstract set(value:TI): void;
-
-    public setToDefault(): void{
-        this.set(defaultValues[this.getTypeName()] as TI);
-    }
     
     protected notifyListeners(change: Change<T>, oldValue: TI, newValue: TI): void{
         this.onSet.invoke(this.getValue());
@@ -290,5 +282,31 @@ export class SetTopic extends Topic<ValueSet,any[]>{
             this.onRemove.invoke(deepcopy(change.item));
         }
     }
+}
 
+/**
+ * A topic that can be used to send events to the server.
+ * This topic simulates an event. It contains no state and its value field is always null.
+ */
+export class EventTopic extends Topic<null>{
+    public changeTypes = {
+        'emit': EventChangeTypes.Emit,
+    }
+    protected value: any;
+    constructor(name:string,commandManager:StateManager){
+        super(name,commandManager);
+        this.value = null;
+    }
+
+    protected _getValue(): any {
+        return this.value;
+    }
+
+    public set(value: any): void{
+        throw new Error('You cannot set the value of an event topic.');
+    }
+
+    public emit(args:any): void{
+        this.applyChangeExternal(new EventChangeTypes.Emit(this,args));
+    }
 }

@@ -1,5 +1,5 @@
 import { print } from "./devUtils";
-import { SetTopic, Topic } from "./topic";
+import { EventTopic, SetTopic, Topic } from "./topic";
 import { Change, SetChangeTypes } from "./change";
 import { Constructor, defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
@@ -191,8 +191,11 @@ export class StateManager{
     private undo(transition: Change<any>[],until?:Change<any>): void{
         this.blockApplyChangeContext(() => {
         while (transition.length > 0){
-            let change = transition.pop();
-            defined(change).inverse().execute();
+            let change = defined(transition.pop());
+            // if change is not eventchange
+            if (!(change.topic instanceof EventTopic)){
+                change.inverse().execute();
+            }
             if (change == until)
                 break;
         }

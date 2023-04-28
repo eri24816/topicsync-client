@@ -251,3 +251,28 @@ export namespace SetChangeTypes    {
         }
     }
 }
+
+export namespace EventChangeTypes{
+    export class Emit extends Change<null> {
+        args: any;
+        constructor(topic:Topic<null>, args:any, id?: string) {
+            super(topic,id);
+            this.args = args;
+        }
+        apply(oldValue: null): null {
+            return null;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "emit",
+                args: this.args,
+                id: this.id,
+            };
+        }
+        inverse(): Change<null>{
+            throw new Error("Cannot inverse an emit change");
+        }
+    }
+}
