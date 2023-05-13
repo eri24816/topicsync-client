@@ -59,8 +59,16 @@ export abstract class Change<T> {
                 return new SetChangeTypes.Append(topic,rest.item, rest.id);
             case SetChangeTypes.Remove:
                 return new SetChangeTypes.Remove(topic,rest.item, rest.id);
+            case DictChangeTypes.Set:
+                return new DictChangeTypes.Set(topic,new Map(Object.entries(rest.value)), rest.id);
+            case DictChangeTypes.Add:
+                return new DictChangeTypes.Add(topic,rest.key, rest.value, rest.id);
+            case DictChangeTypes.Remove:
+                return new DictChangeTypes.Remove(topic,rest.key, rest.id);
+            case DictChangeTypes.ChangeValue:
+                return new DictChangeTypes.ChangeValue(topic,rest.key, rest.value, rest.old_value, rest.id);
             default:
-                throw new Error(`Unknown change type: ${type}`);
+                throw new Error(`Unknown change type: ${topic.getTypeName()} ${type}`);
         }
     }
 }
@@ -207,7 +215,7 @@ export namespace SetChangeTypes    {
             this.item = item;
         }
         apply(oldValue: ValueSet): ValueSet {
-            const newValue = oldValue.copy();
+            const newValue = oldValue.copy();//? copy?
             if (!newValue.add(this.item))
                 throw new InvalidChangeException(`Item ${JSON.stringify(this.item)} already exists in set. Topic: ${this.topic.getName()}`)
             return newValue;
@@ -232,7 +240,7 @@ export namespace SetChangeTypes    {
             this.item = item;
         }
         apply(oldValue: ValueSet): ValueSet {
-            const newValue = oldValue.copy();
+            const newValue = oldValue.copy();//? copy?
             if (!newValue.delete(this.item))
                 throw new InvalidChangeException(`Item ${JSON.stringify(this.item)} not found in set. Topic: ${this.topic.getName()}`);
             return newValue;
@@ -251,6 +259,128 @@ export namespace SetChangeTypes    {
         }
     }
 }
+
+export namespace DictChangeTypes{
+    export class Set<K,V> extends Change<Map<K,V>>{
+        value: Map<K,V>;
+        oldValue: Map<K,V>|null;
+        constructor(topic:Topic<Map<K,V>>, value:Map<K,V>, id?: string) {
+            super(topic,id);
+            this.value = value;
+            this.oldValue = null;
+        }
+        apply(oldValue: Map<K,V>): Map<K,V> {
+            this.oldValue = oldValue;
+            return this.value;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "set",
+                value: this.value,
+                old_value: this.oldValue,
+                id: this.id,
+            };
+        }
+        inverse(): Change<Map<K,V>>{
+            return new Set(this.topic,this.oldValue!);
+        }
+    }
+    export class Add<K,V> extends Change<Map<K,V>>{
+        key: K;
+        value: V;
+        constructor(topic:Topic<Map<K,V>>, key:K, value:V, id?: string) {
+            super(topic,id);
+            this.key = key;
+            this.value = value;
+        }
+        apply(oldValue: Map<K,V>): Map<K,V> {
+            if (oldValue.has(this.key)) {
+                throw new Error(`Adding ${this.key} to ${oldValue} would create a duplicate.`);
+            }
+            oldValue.set(this.key,this.value);
+            return oldValue;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "add",
+                key: this.key,
+                value: this.value,
+                id: this.id,
+            };
+        }
+        inverse(): Change<Map<K,V>>{
+            return new Remove(this.topic,this.key);
+        }
+    }
+    export class Remove<K,V> extends Change<Map<K,V>>{
+        key: K;
+        value: V|null;
+        constructor(topic:Topic<Map<K,V>>, key:K, id?: string) {
+            super(topic,id);
+            this.key = key;
+            this.value = null;
+        }
+        apply(oldValue: Map<K,V>): Map<K,V> {
+            if(!oldValue.has(this.key)){
+                throw new InvalidChangeException(`${this.key} is not in ${oldValue}`);
+            }
+            this.value = oldValue.get(this.key)!;
+            oldValue.delete(this.key);
+            return oldValue;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "remove",
+                key: this.key,
+                id: this.id,
+            };
+        }
+        inverse(): Change<Map<K,V>>{
+            return new Add(this.topic,this.key,this.value!);
+        }
+    }
+    export class ChangeValue<K,V> extends Change<Map<K,V>>{
+        key: K;
+        value: V;
+        oldValue?: V;
+        constructor(topic:Topic<Map<K,V>>, key:K, value:V, old_value?:V, id?: string) {
+            super(topic,id);
+            this.key = key;
+            this.value = value;
+            this.oldValue = old_value;
+        }
+        apply(oldDict: Map<K,V>): Map<K,V> {
+            if(!oldDict.has(this.key)){
+                throw new Error(`${this.key} is not in ${oldDict}`);
+            }
+            this.oldValue = oldDict.get(this.key)!;
+            oldDict.set(this.key,this.value);
+            return oldDict;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "change_value",
+                key: this.key,
+                value: this.value,
+                old_value: this.oldValue,
+                id: this.id,
+            };
+        }
+        
+        inverse(): Change<Map<K,V>>{
+            return new ChangeValue(this.topic,this.key,this.oldValue!,this.value);
+        }
+    }
+}
+            
 
 export namespace EventChangeTypes{
     export class Emit extends Change<null> {

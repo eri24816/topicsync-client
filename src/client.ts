@@ -1,8 +1,8 @@
 import { print } from "./devUtils";
 import { StateManager } from "./stateManager";
-import { SetTopic, Topic } from "./topic";
+import { DictTopic, EventTopic, SetTopic, Topic } from "./topic";
 import { Change } from "./change";
-import { Action, Constructor, defined } from "./utils";
+import { Action, Constructor, defined, json_stringify } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
 
 class Request{
@@ -22,7 +22,7 @@ export class ChatroomClient{
     private readonly servicePool: Map<string, (data: any) => any>;
     private readonly messageHandlers: Map<string, (data: any) => void>;
     private readonly onConnect: Action<[], void>;
-    private readonly topicSet: SetTopic;
+    private readonly topicList: DictTopic<string,any>;
     private onConnectCalled: boolean;
     private pendingSubscriptions: string[] = [];
     
@@ -40,7 +40,7 @@ export class ChatroomClient{
             ['update', this.handleUpdate.bind(this)],
             ['reject', this.handleReject.bind(this)],
         ]);
-        this.topicSet = this.stateManager.addSubsciption("_chatroom/topics",SetTopic);
+        this.topicList = this.stateManager.addSubsciption("_chatroom/topic_list",DictTopic<string,any>);
         this.onConnect = new Action<[], void>();
         this.onConnectCalled = false;
         
@@ -54,7 +54,7 @@ export class ChatroomClient{
     }
 
     private sendToServer(messageType: string, args: any) {
-        const message = JSON.stringify({type: messageType, args: args});
+        const message = json_stringify({type: messageType, args: args});
         console.debug('<\t'+message);
         this.ws.send(message);
     }
@@ -89,7 +89,7 @@ export class ChatroomClient{
     private handleHello({id}: {id: number}) {
         this.clientID = id;
         console.debug(`[ChatRoom] Connected to server with client ID ${id}`);
-        this.sendToServer('subscribe', { topic_name: "_chatroom/topics" });
+        this.sendToServer('subscribe', { topic_name: "_chatroom/topic_list" });
     }
 
     private handleRequest({service_name: serviceName,args,request_id:requestId}: {service_name: string, args: any, request_id: string}) {
@@ -117,6 +117,8 @@ export class ChatroomClient{
             if (!this.stateManager.hasTopic(changeDict.topic_name))
                 continue; // This could happen when client subscribed a topic while the update message was in flight.
             const topic = this.stateManager.getTopic(changeDict.topic_name);
+            if(topic instanceof EventTopic)
+                continue;
             const change = topic.deserializeChange(changeDict);
             changeObjects.push(change);
         }
@@ -153,12 +155,7 @@ export class ChatroomClient{
         }
         // Try to query topic type from this.topicSet
         if (topicType === undefined){
-            for (const topic_info of this.topicSet.getValue()){
-                if (topic_info.topic_name === topicName){
-                    topicType = topic_info.topic_type;
-                    break;
-                }
-            }
+            topicType = this.topicList.get(topicName)['type']
             if (topicType === undefined){
                 throw new Error(`Type of topic ${topicName} is unknown. Please specify the topic type.`);
             }
@@ -174,7 +171,7 @@ export class ChatroomClient{
      * @param topicName The topic's name.
      */
     public unsubscribe(topicName: string) {
-        if(topicName==="_chatroom/topics")
+        if(topicName==="_chatroom/topic_list")
             throw new Error(`Cannot unsubscribe from topic ${topicName}`);
         this.stateManager.removeSubscription(topicName);
         this.sendToServer('unsubscribe', { topic_name: topicName });
@@ -182,5 +179,15 @@ export class ChatroomClient{
 
     public onConnected(callback: () => void) {
         this.onConnect.add(callback);
+    }
+
+    public on(event_name: string, callback: (args:any) => void) {
+        const topic = this.getTopic(event_name,EventTopic);
+        topic.onEmit.add(callback);
+    }
+
+    public emit(event_name: string, args: any) {
+        const topic = this.getTopic(event_name,EventTopic);
+        topic.emit(args);
     }
 }

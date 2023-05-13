@@ -1,13 +1,51 @@
 import { ChatroomClient } from "./client";
-import { SetTopic, Topic } from "./topic";
-import { defined } from "./utils";
+import { DictTopic, SetTopic, Topic } from "./topic";
+import { defined, json_stringify } from "./utils";
 import { print } from "./devUtils";
+
+function compare_prefix(a: string, b: string): number{
+    for (let i = 0; i < a.length && i < b.length; i++) {
+        let ai = a[i];
+        let bi = b[i];
+        if (ai == '_') ai = '\0';
+        if (bi == '_') bi = '\0';
+        if(ai < bi){
+            return -1;
+        }
+        if (ai > bi){
+            return 1;
+        }
+    }
+    if (a.length < b.length) {
+        return -1;
+    }
+    if (a.length > b.length) {
+        return 1;
+    }
+    return 0;
+}
+
+function compare(a: string, b: string,sep:string){
+    let a_split = a.split(sep);
+    let b_split = b.split(sep);
+    let i = 0;
+    while(i < a_split.length && i < b_split.length){
+        if(compare_prefix(a_split[i],b_split[i])==-1){
+            return false;
+        }
+        if(compare_prefix(a_split[i],b_split[i])==1){
+            return true;
+        }
+        i++;
+    }
+    return true;
+}
 
 export class TopicsMonitor{
     container: HTMLElement;
     table: HTMLTableElement; 
     rows: Map<string,HTMLTableRowElement>;
-    topicList: SetTopic;
+    topicList: DictTopic<string,any>;
     topics: Map<string, Topic<any>>;
     client: ChatroomClient;
     constructor(container: HTMLElement, client: ChatroomClient) {
@@ -36,25 +74,25 @@ export class TopicsMonitor{
         this.table.appendChild(header);
 
         this.container.appendChild(this.table);
-        this.topicList = client.getTopic<SetTopic>('_chatroom/topics');
-        this.topicList.onAppend.add(this.topicAdded.bind(this));
+        this.topicList = client.getTopic<DictTopic<string,any>>('_chatroom/topic_list');
+        this.topicList.onAdd.add(this.topicAdded.bind(this));
         this.topicList.onRemove.add(this.topicRemoved.bind(this));
-        for(const topic of this.topicList.getValue()){
-            this.topicAdded(topic);
+        for(const [topic,props] of this.topicList.getValue().entries()){
+            this.topicAdded(topic,props);
         }
     }
 
-    private topicAdded({ topic_name, topic_type }: { topic_name: string, topic_type: string }): void{
+    private topicAdded(topic_name:string,props:any): void{
         const topic = this.client.getTopic(topic_name)
         topic.onSet.add((value) => {
-            //print('topic changed:', topic_name, JSON.stringify(value));
-            print(`${topic_name} changed to ${JSON.stringify(value)}`);
-            defined(row.children[2]).textContent = JSON.stringify(value);
+            //print('topic changed:', topic_name, json_stringify(value));
+            print(`${topic_name} changed to ${json_stringify(value)}`);
+            defined(row.children[2]).textContent = json_stringify(value);
         });
         this.topics.set(topic_name, topic);
         
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${topic_name}</td><td>${topic_type}</td><td>${JSON.stringify(topic.getValue())}</td>`;
+        row.innerHTML = `<td>${topic_name}</td><td>${props['type']}</td><td>${json_stringify(topic.getValue())}</td>`;
         // padding left
         for(const cell of row.children as HTMLCollectionOf<HTMLElement>){
             cell.style.paddingLeft = '5px';
@@ -62,11 +100,16 @@ export class TopicsMonitor{
             cell.style.border = '1px solid #000000';
             cell.style.borderCollapse = 'collapse';
         }
-        this.table.appendChild(row);
+        //sort
+        let next = this.table.children[1];
+        while(next != null && !compare(next.children[0].textContent!,topic_name,'/')){
+            next = next.nextElementSibling!;
+        }
+        this.table.insertBefore(row, next);
         this.rows.set(topic_name, row);
     }
 
-    private topicRemoved({topic_name,type}: { topic_name: string, type: string }): void{
+    private topicRemoved(topic_name:string): void{
         const row = defined(this.rows.get(topic_name));
         this.table.removeChild(row);
         this.rows.delete(topic_name);

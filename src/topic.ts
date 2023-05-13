@@ -1,10 +1,10 @@
-import { Action, camelToSnake, equalValue } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes, EventChangeTypes } from './change';
+import { Action, camelToSnake, defined } from './utils';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes, EventChangeTypes, DictChangeTypes } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
 
-type Validator<T> = (oldValue: T, newValue: T, change: Change<T>) => boolean;
+type Validator<T> = (oldValue: T, change: Change<T>) => boolean;
 
 interface ChangeDict {
   type: string;
@@ -20,6 +20,7 @@ export abstract class Topic<T,TI=T>{
             int: IntTopic,
             float: FloatTopic,
             set: SetTopic,
+            dict: DictTopic,
             event: EventTopic,
         }
     }
@@ -91,24 +92,20 @@ export abstract class Topic<T,TI=T>{
 
     protected notifyListenersT(change: Change<T>, oldValue: T, newValue: T): void{}
 
-    private validateChangeAndGetResult(change: Change<T>): T{
+    private validateChange(change: Change<T>): void{
         const oldValue = this.value;
-        const newValue = change.apply(oldValue);
         for (const validator of this.validators) {
-            if (!validator(oldValue, newValue, change)) {
-                throw new InvalidChangeException(`Change ${change.serialize()} is not valid for topic ${this.name}. Old value: ${oldValue}, invalid new value: ${newValue}`);
+            if (!validator(oldValue, change)) {
+                throw new InvalidChangeException(`Change ${change.serialize()} is not valid for topic ${this.name}. Old value: ${oldValue}`);
             }
         }
-        if ((newValue as any)['value'] !== undefined) {
-            throw new Error('Invalid change: new value has a "value" property');
-        }
-        return newValue;
     }
 
     public applyChange(change: Change<T>): void{
+        this.validateChange(change);
         const oldValueTI = this.getValue();
         const oldValueT = this.value;
-        this.value = this.validateChangeAndGetResult(change);
+        this.value = change.apply(this.value);
         const newValueTI = this.getValue();
         const newValueT = this.value;
         this.notifyListenersT(change, oldValueT, newValueT);
@@ -117,7 +114,7 @@ export abstract class Topic<T,TI=T>{
 
     public applyChangeExternal(change: Change<T>): void{
         this.checkDetached();
-        this.validateChangeAndGetResult(change);
+        this.validateChange(change);
         let preview = true;
         for (const changeType of this.noPreviewChangeTypes) {
             if (change instanceof changeType) {
@@ -246,7 +243,7 @@ export class SetTopic extends Topic<ValueSet,any[]>{
         this.value = new ValueSet();
         this.onAppend = new Action();
         this.onRemove = new Action();
-        if (initValue !== undefined) // for _chatroom/topics
+        if (initValue !== undefined) // for _chatroom/topic_list
             this.value.setValues(initValue);
     }
 
@@ -284,6 +281,80 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     }
 }
 
+export class DictTopic<K,V> extends Topic<Map<K,V>>{
+    public changeTypes = {
+        'set': DictChangeTypes.Set,
+        'add': DictChangeTypes.Add,
+        'remove': DictChangeTypes.Remove,
+        'change_value': DictChangeTypes.ChangeValue,
+    }
+    onSet: Action<[Map<K,V>], void>;
+    onAdd: Action<[K,V], void>;
+    onRemove: Action<[K], void>;
+    onChangeValue: Action<[K,V], void>;
+    protected value: Map<K,V>;
+    constructor(name:string,commandManager:StateManager,initValue?:Map<K,V>){
+        super(name,commandManager);
+        this.value = new Map<K,V>();
+        this.onSet = new Action();
+        this.onAdd = new Action();
+        this.onRemove = new Action();
+        this.onChangeValue = new Action();
+    }
+    protected _getValue(): Map<K,V> {
+        return this.value;
+    }
+    public set(value: Map<K,V>|any): void{
+        if (value instanceof Map) {
+            this.applyChangeExternal(new DictChangeTypes.Set<K,V>(this,value));
+        }
+        else {
+            this.applyChangeExternal(new DictChangeTypes.Set<K,V>(this,new Map(Object.entries(value)) as Map<K,V>));
+        }
+    }
+    public add(key: K, value: V): void{
+        this.applyChangeExternal(new DictChangeTypes.Add<K,V>(this,key,value));
+    }
+    public remove(key: K): void{
+        this.applyChangeExternal(new DictChangeTypes.Remove<K,V>(this,key));
+    }
+    public changeValue(key: K, value: V): void{
+        this.applyChangeExternal(new DictChangeTypes.ChangeValue<K,V>(this,key,value));
+    }
+    public get(key: K): V {
+        return defined(this.value.get(key));
+    }
+
+    protected notifyListenersT(change: Change<Map<K,V>>, oldValue: Map<K,V>, newValue: Map<K,V>): void{
+        if (change instanceof DictChangeTypes.Set) {
+            const oldKeys = new Set(oldValue.keys());
+            const newKeys = new Set(newValue.keys());
+            const removedKeys = new Set([...oldKeys].filter(x => !newKeys.has(x)));
+            const addedKeys = new Set([...newKeys].filter(x => !oldKeys.has(x)));
+            const remainedKeys = new Set([...oldKeys].filter(x => newKeys.has(x)));
+            for (const key of removedKeys) {
+                this.onRemove.invoke(key);
+            }
+            for (const key of addedKeys) {
+                this.onAdd.invoke(key,newValue.get(key)!);
+            }
+            for (const key of remainedKeys) {
+                if (oldValue.get(key) !== newValue.get(key)) {
+                    this.onChangeValue.invoke(key,newValue.get(key)!);
+                }
+            }
+        } else if (change instanceof DictChangeTypes.Add) {
+            this.onAdd.invoke(change.key,change.value);
+        } else if (change instanceof DictChangeTypes.Remove) {
+            this.onRemove.invoke(change.key);
+        } else if (change instanceof DictChangeTypes.ChangeValue) {
+            this.onChangeValue.invoke(change.key,change.value);
+        } else {
+            throw new Error(`Unsupported change type ${change} for ${this.constructor.name}`);
+        }
+    }
+}
+
 /**
  * A topic that can be used to send events to the server.
  * This topic simulates an event. It contains no state and its value field is always null.
@@ -293,9 +364,11 @@ export class EventTopic extends Topic<null>{
         'emit': EventChangeTypes.Emit,
     }
     protected value: any;
+    public onEmit: Action<[any], void>;
     constructor(name:string,commandManager:StateManager){
         super(name,commandManager);
         this.value = null;
+        this.onEmit = new Action();
     }
 
     protected _getValue(): any {

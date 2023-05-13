@@ -58,3 +58,13 @@ export function equalValue(a: any, b: any) {
 }
 
 export type Constructor<T> = new (...args: any[]) => T;
+
+export function json_stringify(obj: any): string{
+    return JSON.stringify(obj, function (key, value) {
+        if (value instanceof Map) {
+            return Object.fromEntries(value.entries()) // or with spread: value: [...value];
+        } else {
+            return value;
+        }
+    });
+}

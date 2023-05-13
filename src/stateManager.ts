@@ -192,12 +192,11 @@ export class StateManager{
         this.blockApplyChangeContext(() => {
         while (transition.length > 0){
             let change = defined(transition.pop());
-            // if change is not eventchange
+            if (change == until)
+                break;
             if (!(change.topic instanceof EventTopic)){
                 change.inverse().execute();
             }
-            if (change == until)
-                break;
         }
         });
     }
