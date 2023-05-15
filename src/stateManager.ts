@@ -27,6 +27,10 @@ export class StateManager{
         this.blockApplyChange = false;
     }
 
+    get allSubscribedTopics(): Map<string, Topic<any>> {
+        return this.topics
+    }
+
     getTopic<T extends Topic<any>>(topicName: string): T {
         if (!this.topics.has(topicName)) {
             throw new Error(`Topic ${topicName} is not in the subscription.`);

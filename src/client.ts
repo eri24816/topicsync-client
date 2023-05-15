@@ -177,6 +177,10 @@ export class ChatroomClient{
         this.sendToServer('unsubscribe', { topic_name: topicName });
     }
 
+    get allSubscribedTopics(): Map<string, Topic<any>> {
+        return this.stateManager.allSubscribedTopics;
+    }
+
     public onConnected(callback: () => void) {
         this.onConnect.add(callback);
     }
