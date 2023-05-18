@@ -67,6 +67,13 @@ export abstract class Change<T> {
                 return new DictChangeTypes.Remove(topic,rest.key, rest.id);
             case DictChangeTypes.ChangeValue:
                 return new DictChangeTypes.ChangeValue(topic,rest.key, rest.value, rest.old_value, rest.id);
+            case ListChangeTypes.Set:
+                return new ListChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
+            case ListChangeTypes.Insert:
+                return new ListChangeTypes.Insert(topic,rest.index, rest.value, rest.id);
+            case ListChangeTypes.Pop:
+                return new ListChangeTypes.Pop(topic,rest.index, rest.id);
+                
             default:
                 throw new Error(`Unknown change type: ${topic.getTypeName()} ${type}`);
         }
@@ -377,6 +384,127 @@ export namespace DictChangeTypes{
         
         inverse(): Change<Map<K,V>>{
             return new ChangeValue(this.topic,this.key,this.oldValue!,this.value);
+        }
+    }
+}
+
+// class ListChangeTypes:
+//     class SetChange(SetChange):
+//         def serialize(self):
+//             return {"topic_name":self.topic_name,"topic_type":"list","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
+
+//     class InsertChange(Change):
+//         def __init__(self,topic_name, item,position,id=None):
+//             super().__init__(topic_name,id)
+//             self.item = item
+//             self.position = position
+//         def apply(self, old_value:list):
+//             if self.position < 0:
+//                 self.position = len(old_value) + self.position
+//             old_value.insert(self.position,self.item)
+//             return old_value
+//         def serialize(self):
+//             return {"topic_name":self.topic_name,"topic_type":"list","type":"insert","item":self.item,"position":self.position,"id":self.id}
+//         def inverse(self)->Change:
+//             return ListChangeTypes.PopChange(self.topic_name,self.item)
+        
+//     class PopChange(Change):
+//         def __init__(self,topic_name, position,id=None):
+//             super().__init__(topic_name,id)
+//             self.position = position
+//         def apply(self, old_value:list):
+//             if self.position < 0:
+//                 self.position = len(old_value) + self.position
+//             self.item = old_value.pop(self.position)
+//             return old_value
+//         def serialize(self):
+//             return {"topic_name":self.topic_name,"topic_type":"list","type":"pop","position":self.position,"id":self.id}
+//         def inverse(self)->Change:
+//             return ListChangeTypes.InsertChange(self.topic_name,self.item,self.position)
+export namespace ListChangeTypes{
+    export class Set<V> extends Change<Array<V>>{
+        value: Array<V>;
+        oldValue?: Array<V>;
+        constructor(topic:Topic<Array<V>>, value:Array<V>, old_value?:Array<V>, id?: string) {
+            super(topic,id);
+            this.value = value;
+            this.oldValue = old_value;
+        }
+        apply(oldValue: Array<V>): Array<V> {
+            this.oldValue = oldValue.slice();
+            oldValue.splice(0,oldValue.length,...this.value);
+            return oldValue;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "set",
+                value: this.value,
+                old_value: this.oldValue,
+                id: this.id,
+            };
+        }
+        inverse(): Change<Array<V>>{
+            return new Set(this.topic,this.oldValue!,this.value);
+        }
+    }
+    export class Insert<V> extends Change<Array<V>>{
+        item: V;
+        position: number;
+
+        constructor(topic:Topic<Array<V>>, item:V, position:number, id?: string) {
+            super(topic,id);
+            this.item = item;
+            this.position = position;
+        }
+        apply(oldValue: Array<V>): Array<V> {
+            if(this.position < 0){
+                this.position = oldValue.length + this.position;
+            }
+            oldValue.splice(this.position,0,this.item);
+            return oldValue;
+        }
+
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "insert",
+                item: this.item,
+                position: this.position,
+                id: this.id,
+            };
+        }
+        inverse(): Change<Array<V>>{
+            return new Pop(this.topic,this.position);
+        }
+    }
+    export class Pop<V> extends Change<Array<V>>{
+        position: number;
+        item?: V;
+        constructor(topic:Topic<Array<V>>, position:number, id?: string) {
+            super(topic,id);
+            this.position = position;
+        }
+        apply(oldValue: Array<V>): Array<V> {
+            if(this.position < 0){
+                this.position = oldValue.length + this.position;
+            }
+            this.item = oldValue.splice(this.position,1)[0];
+            return oldValue;
+        }
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "pop",
+                position: this.position,
+                id: this.id,
+            };
+        }
+        inverse(): Change<Array<V>>{
+            return new Insert(this.topic,this.item!,this.position);
         }
     }
 }

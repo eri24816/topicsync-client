@@ -1,5 +1,5 @@
 import { Action, camelToSnake, defined } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes, EventChangeTypes, DictChangeTypes } from './change';
+import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes, EventChangeTypes, DictChangeTypes, ListChangeTypes } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
@@ -21,6 +21,7 @@ export abstract class Topic<T,TI=T>{
             float: FloatTopic,
             set: SetTopic,
             dict: DictTopic,
+            list: ListTopic,
             event: EventTopic,
         }
     }
@@ -349,6 +350,78 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
             this.onRemove.invoke(change.key);
         } else if (change instanceof DictChangeTypes.ChangeValue) {
             this.onChangeValue.invoke(change.key,change.value);
+        } else {
+            throw new Error(`Unsupported change type ${change} for ${this.constructor.name}`);
+        }
+    }
+}
+
+export class ListTopic<V=any> extends Topic<V[]>{
+    public changeTypes = {
+        'set': ListChangeTypes.Set,
+        'insert': ListChangeTypes.Insert,
+        'pop': ListChangeTypes.Pop,
+    }
+    protected value: V[];
+    public onInsert: Action<[V,number], void>;
+    public onPop: Action<[V,number], void>;
+    constructor(name:string,commandManager:StateManager){
+        super(name,commandManager);
+        this.value = [];
+        this.onInsert = new Action();
+        this.onPop = new Action();
+    }
+
+    protected _getValue(): V[] {
+        return this.value;
+    }
+
+    public set(value: V[]): void{
+        this.applyChangeExternal(new ListChangeTypes.Set<V>(this,value));
+    }
+
+    public insert(item: V, position:number=-1): void{
+        this.applyChangeExternal(new ListChangeTypes.Insert<V>(this,item,position));
+    }
+
+    public pop(position:number=-1): V{
+        let item = this.value[position];
+        this.applyChangeExternal(new ListChangeTypes.Pop<V>(this,position));
+        return item;
+    }
+
+    public remove(item: V): void{
+        const position = this.value.indexOf(item);
+        this.applyChangeExternal(new ListChangeTypes.Pop<V>(this,position));
+    }
+
+    public get length(): number{
+        return this.value.length;
+    }
+
+    public getitem(index: number): V{
+        return this.value[index];
+    }
+
+    public setitem(index: number, value: V): void{
+        this.pop(index);
+        this.insert(value,index);
+    }
+
+    protected notifyListenersT(change: Change<V[]>, oldValue: V[], newValue: V[]): void{
+        super.notifyListenersT(change,oldValue,newValue);
+        if (change instanceof ListChangeTypes.Set) {
+            // pop all and insert all
+            for (let i = oldValue.length-1; i >= 0; i--) {
+                this.onPop.invoke(oldValue[i],i);
+            }
+            for (let i = 0; i < newValue.length; i++) {
+                this.onInsert.invoke(newValue[i],i);
+            }
+        } else if (change instanceof ListChangeTypes.Insert) {
+            this.onInsert.invoke(change.item,change.position);
+        } else if (change instanceof ListChangeTypes.Pop) {
+            this.onPop.invoke(change.item,change.position);
         } else {
             throw new Error(`Unsupported change type ${change} for ${this.constructor.name}`);
         }

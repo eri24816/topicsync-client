@@ -1,8 +1,24 @@
 import { print } from "./devUtils";
 import { EventTopic, SetTopic, Topic } from "./topic";
 import { Change, SetChangeTypes } from "./change";
-import { Constructor, defined } from "./utils";
+import { Callback, Constructor, defined } from "./utils";
 import { v4 as uuidv4 } from 'uuid';
+
+class StackTracker{
+    stack: string[] = [];
+    enter(id: string, callback: Callback): void{
+        try{
+            this.stack.push(id);
+            callback();
+        }
+        finally{
+            this.stack.pop();
+        }
+    }
+    getStack(): string[]{
+        return this.stack;
+    }
+}
 
 export class StateManager{
     private topics: Map<string, Topic<any>>;
@@ -14,6 +30,7 @@ export class StateManager{
     private onActionFailed: (() => void);
     private recursionDepth: number;
     private blockApplyChange: boolean;
+    private stackTracker: StackTracker = new StackTracker();
 
     constructor(onActionProduced: (action:Change<any>[],actionID:string) => void, onActionFailed: () => void) {
         this.topics = new Map<string, Topic<any>>();
@@ -116,22 +133,29 @@ export class StateManager{
             return;
         }
 
+        if (this.stackTracker.getStack().includes(change.topic.getName())){
+            // Prevent infinite recursion
+            return;
+        }
+
         if (preview){
-        // simulate the transition due to the action.
-            this.recursionDepth++;
-            this.recordingPreview.push(change);
-            try{
-                change.execute();
-            }
-            catch(e){
-                // revert the whole subtree
-                console.log(e)
-                this.undo(this.recordingPreview,change);
-                throw e;
-            }
-            finally{
-                this.recursionDepth--;
-            }
+            // simulate the transition due to the action.
+            this.stackTracker.enter(change.topic.getName(), () => {
+                this.recursionDepth++;
+                this.recordingPreview.push(change);
+                try{
+                    change.execute();
+                }
+                catch(e){
+                    // revert the whole subtree
+                    console.log(e)
+                    this.undo(this.recordingPreview,change);
+                    throw e;
+                }
+                finally{
+                    this.recursionDepth--;
+                }
+            });
         }
 
         // the first-layer calls to applyChange() in record() are recorded in the action

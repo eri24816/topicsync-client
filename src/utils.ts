@@ -32,7 +32,7 @@ export class NullContextManager extends ContextManager{
     }
 }
 
-type Callback<ARGS extends any[], OUT> = (...args: ARGS) => OUT;
+export type Callback<ARGS extends any[] = any[], OUT = any> = (...args: ARGS) => OUT;
 
 export class Action<ARGS extends any[], OUT=void> {
     private _callbacks: Callback<ARGS, OUT>[] = [];
