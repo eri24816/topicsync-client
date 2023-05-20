@@ -12,7 +12,7 @@ interface ChangeDict {
 }
 
 export abstract class Topic<T,TI=T>{
-    static getTypeDict(): {[key:string]:{ new(name: string, commandManager: StateManager): Topic<any>; }}
+    static getTypeDict(): {[key:string]:{ new(name: string, stateManager: StateManager): Topic<any>; }}
     {
         return {
             generic: GenericTopic,
@@ -25,24 +25,26 @@ export abstract class Topic<T,TI=T>{
             event: EventTopic,
         }
     }
-    static GetTypeFromName(name: string): { new(name: string, commandManager: StateManager): Topic<any>; }{
+    static GetTypeFromName(name: string): { new(name: string, stateManager: StateManager): Topic<any>; }{
         return Topic.getTypeDict()[name];
     }
-    static GetNameFromType(type: { new(name: string, commandManager: StateManager): Topic<any>; }): string{
+    static GetNameFromType(type: { new(name: string, stateManager: StateManager): Topic<any>; }): string{
         return camelToSnake(type.name.replace('Topic',''));
     }
     protected name: string;
     protected abstract value: T;
-    private commandManager: StateManager;
+    private _stateManager: StateManager;
+    get stateManager(): StateManager{return this._stateManager;}
     private validators: Validator<T>[];
     private noPreviewChangeTypes: Set<ConstructorOfChange<T>>;
     public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T> }
     public onSet = new Action<[TI],void>;
     public onSet2 = new Action<[TI,TI],void>;
+    public isPretended: boolean = false;
     private detached: boolean;
-    constructor(name:string,commandManager:StateManager){
+    constructor(name:string,stateManager:StateManager){
         this.name = name;
-        this.commandManager = commandManager;
+        this._stateManager = stateManager;
         this.validators = [];
         this.noPreviewChangeTypes = new Set();
         this.detached = false;
@@ -103,6 +105,7 @@ export abstract class Topic<T,TI=T>{
     }
 
     public applyChange(change: Change<T>): void{
+        this.checkDetached()
         this.validateChange(change);
         const oldValueTI = this.getValue();
         const oldValueT = this.value;
@@ -123,7 +126,7 @@ export abstract class Topic<T,TI=T>{
                 break;
             }
         }
-        this.commandManager.applyChange(change,preview);
+        this._stateManager.applyChange(change,preview);
     
     }
 
@@ -138,10 +141,13 @@ export abstract class Topic<T,TI=T>{
         this.detached = true;
     }
 
-    private checkDetached(): void{
+    private checkDetached(): boolean{
         if (this.detached) {
-            throw new Error(`The topic ${this.name} has been removed or unsubscribed. You cannot use it anymore.`);
+            //console.warn(`The topic ${this.name} has been removed or unsubscribed. It will not sync with the server anymore.`);
+            throw new Error(`The topic ${this.name} has been removed or unsubscribed. It will not sync with the server anymore.`);
+            return true;
         }
+        return false;
     }
 }
 
@@ -150,8 +156,8 @@ export class GenericTopic<T> extends Topic<T>{
         'set': GenericChangeTypes.Set<T>,
     }
     protected value!: T
-    constructor(name:string,commandManager:StateManager){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager){
+        super(name,stateManager);
     }
 
     protected _getValue(): T {
@@ -168,8 +174,8 @@ export class StringTopic extends Topic<string>{
         'set': StringChangeTypes.Set,
     }
     protected value: string;
-    constructor(name:string,commandManager:StateManager){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager){
+        super(name,stateManager);
         this.value = '';
     }
 
@@ -188,8 +194,8 @@ export class IntTopic extends Topic<number>{
         'add': IntChangeTypes.Add
     }
     protected value: number;
-    constructor(name:string,commandManager:StateManager){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager){
+        super(name,stateManager);
         this.value = 0;
     }
 
@@ -212,8 +218,8 @@ export class FloatTopic extends Topic<number>{
         'add': FloatChangeTypes.Add
     }
     protected value: number;
-    constructor(name:string,commandManager:StateManager){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager){
+        super(name,stateManager);
         this.value = 0;
     }
 
@@ -239,8 +245,8 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     onAppend: Action<[any], void>;
     onRemove: Action<[any], void>;
     protected value: ValueSet;
-    constructor(name:string,commandManager:StateManager,initValue?:any[]){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager,initValue?:any[]){
+        super(name,stateManager);
         this.value = new ValueSet();
         this.onAppend = new Action();
         this.onRemove = new Action();
@@ -294,8 +300,8 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
     onRemove: Action<[K], void>;
     onChangeValue: Action<[K,V], void>;
     protected value: Map<K,V>;
-    constructor(name:string,commandManager:StateManager,initValue?:Map<K,V>){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager,initValue?:Map<K,V>){
+        super(name,stateManager);
         this.value = new Map<K,V>();
         this.onSet = new Action();
         this.onAdd = new Action();
@@ -365,8 +371,8 @@ export class ListTopic<V=any> extends Topic<V[]>{
     protected value: V[];
     public onInsert: Action<[V,number], void>;
     public onPop: Action<[V,number], void>;
-    constructor(name:string,commandManager:StateManager){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager){
+        super(name,stateManager);
         this.value = [];
         this.onInsert = new Action();
         this.onPop = new Action();
@@ -438,8 +444,8 @@ export class EventTopic extends Topic<null>{
     }
     protected value: any;
     public onEmit: Action<[any], void>;
-    constructor(name:string,commandManager:StateManager){
-        super(name,commandManager);
+    constructor(name:string,stateManager:StateManager){
+        super(name,stateManager);
         this.value = null;
         this.onEmit = new Action();
     }

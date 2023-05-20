@@ -16,9 +16,13 @@ interface ChangeDict {
 
 export abstract class Change<T> {
     id: string;
-    topic: Topic<T>;
+    private _topic: Topic<T>;
+    get topic(): Topic<T> {
+        this._topic = this._topic.stateManager.getTopic(this._topic.getName());
+        return this._topic;
+    }
     constructor(topic: Topic<T>,id?: string) {
-        this.topic = topic;
+        this._topic = topic;
         if (id) {
             this.id = id;
         } else {
@@ -82,6 +86,7 @@ export abstract class Change<T> {
 
 import deepcopy from "deepcopy";
 import { Topic } from "./topic";
+import { print } from "./devUtils"
 
 interface SetChangeDict extends ChangeDict {
     type: "set";
@@ -388,39 +393,6 @@ export namespace DictChangeTypes{
     }
 }
 
-// class ListChangeTypes:
-//     class SetChange(SetChange):
-//         def serialize(self):
-//             return {"topic_name":self.topic_name,"topic_type":"list","type":"set","value":self.value,"old_value":self.old_value,"id":self.id}
-
-//     class InsertChange(Change):
-//         def __init__(self,topic_name, item,position,id=None):
-//             super().__init__(topic_name,id)
-//             self.item = item
-//             self.position = position
-//         def apply(self, old_value:list):
-//             if self.position < 0:
-//                 self.position = len(old_value) + self.position
-//             old_value.insert(self.position,self.item)
-//             return old_value
-//         def serialize(self):
-//             return {"topic_name":self.topic_name,"topic_type":"list","type":"insert","item":self.item,"position":self.position,"id":self.id}
-//         def inverse(self)->Change:
-//             return ListChangeTypes.PopChange(self.topic_name,self.item)
-        
-//     class PopChange(Change):
-//         def __init__(self,topic_name, position,id=None):
-//             super().__init__(topic_name,id)
-//             self.position = position
-//         def apply(self, old_value:list):
-//             if self.position < 0:
-//                 self.position = len(old_value) + self.position
-//             self.item = old_value.pop(self.position)
-//             return old_value
-//         def serialize(self):
-//             return {"topic_name":self.topic_name,"topic_type":"list","type":"pop","position":self.position,"id":self.id}
-//         def inverse(self)->Change:
-//             return ListChangeTypes.InsertChange(self.topic_name,self.item,self.position)
 export namespace ListChangeTypes{
     export class Set<V> extends Change<Array<V>>{
         value: Array<V>;

@@ -25,11 +25,15 @@ export class ChatroomClient{
     private readonly topicList: DictTopic<string,any>;
     private onConnectCalled: boolean;
     private pendingSubscriptions: string[] = [];
-    
+    record: (callback?: () => void, pretend?: boolean) => void
+    clearPretendedChanges: () => void
+    private pretendedTopics: DictTopic<string,string>;
 
     constructor(host: string){
         this.ws = new WebSocket(host);
         this.stateManager = new StateManager(this.onActionProduced.bind(this), this.onActionFailed.bind(this));
+        this.record = this.stateManager.record;
+        this.clearPretendedChanges = this.stateManager.clearPretendedChanges;
         this.clientID = -1;
         this.requestPool = new Map<string, Request>; 
         this.servicePool = new Map<string, (data: any) => void>();
@@ -43,6 +47,13 @@ export class ChatroomClient{
         this.topicList = this.stateManager.addSubsciption("_chatroom/topic_list",DictTopic<string,any>);
         this.onConnect = new Action<[], void>();
         this.onConnectCalled = false;
+        this.pretendedTopics = this.stateManager.addSubsciption("_chatroom/pretended_topics",DictTopic<string,string>);
+        this.pretendedTopics.onAdd.add((topicName: string, topicType:string) => {
+            this.stateManager.addPretendedTopic(topicName,topicType);
+        });
+        this.pretendedTopics.onRemove.add((topicName: string) => {
+            this.stateManager.removePretendedTopic(topicName);
+        });
         
         this.ws.onmessage = (event) => {
             console.debug('>\t'+event.data);
@@ -141,6 +152,11 @@ export class ChatroomClient{
         this.requestPool.set(id, request);
         this.sendToServer('request', { service_name: serviceName, args: args, request_id: id });
     }
+
+    public addPretendedTopic(topicName: string, topicType: string):Topic<any> {
+        this.pretendedTopics.add(topicName,topicType);
+        return this.stateManager.getTopic(topicName);
+    }
     
     /**
      * Get a topic object. Subscribe to the topic if it is not subscribed.
@@ -160,8 +176,21 @@ export class ChatroomClient{
                 throw new Error(`Type of topic ${topicName} is unknown. Please specify the topic type.`);
             }
         }
-        let topic = this.stateManager.addSubsciption(topicName,topicType);
-        this.sendSubscribe(topicName);
+        let topic: T;
+        if(this.stateManager.isPretending){
+            let topicTypeName:string;
+            if(typeof topicType === 'string')
+                topicTypeName = topicType;
+            else
+                topicTypeName = Topic.GetNameFromType(topicType);
+            this.pretendedTopics.add(topicName,topicTypeName);
+            topic = this.stateManager.getTopic(topicName);
+            //throw new Error(`While pretending, use addPretendedTopic instead of getTopic.`);
+        }
+        else{
+            topic = this.stateManager.addSubsciption(topicName,topicType);
+            this.sendSubscribe(topicName);
+        }
         return topic as T;
     }
 
@@ -170,11 +199,12 @@ export class ChatroomClient{
      * The topic will not ever receive updates from the server. The topic will be marked as detached.
      * @param topicName The topic's name.
      */
-    public unsubscribe(topicName: string) {
+    public unsubscribe(topicName: string, becauseRemoved: boolean = false) {
         if(topicName==="_chatroom/topic_list")
             throw new Error(`Cannot unsubscribe from topic ${topicName}`);
-        this.stateManager.removeSubscription(topicName);
-        this.sendToServer('unsubscribe', { topic_name: topicName });
+        let isPretended = this.stateManager.removeSubscription(topicName);
+        if(!isPretended)
+            this.sendToServer('unsubscribe', { topic_name: topicName });
     }
 
     get allSubscribedTopics(): Map<string, Topic<any>> {

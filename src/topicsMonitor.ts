@@ -114,7 +114,7 @@ export class TopicsMonitor{
         this.table.removeChild(row);
         this.rows.delete(topic_name);
         this.topics.delete(topic_name);
-        this.client.unsubscribe(topic_name);
+        this.client.unsubscribe(topic_name,true);
     }
 
 }
