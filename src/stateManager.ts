@@ -46,7 +46,9 @@ export class StateManager{
     private recursionDepth: number;
     private blockApplyChange: boolean;
     private stackTracker: StackTracker = new StackTracker();
-    private pendingUnsubscriptions: Topic<any>[] = [];
+    private topicsToSetDetached: Topic<any>[] = [];
+    private isDoingTransition: boolean = false; // True if the state manager is recording or handling reject/update from server.
+    private tasksWaitingTransitionFinish: (() => void)[] = []; //some task (like UI initialization) may need to wait for the transition to finish to get the correct state.
 
     constructor(onActionProduced: (action:Change<any>[],actionID:string) => void, onActionFailed: () => void) {
         this.topics = new Map<string, Topic<any>>();
@@ -61,9 +63,10 @@ export class StateManager{
         this.recursionDepth = 0;
         this.blockApplyChange = false;
 
-        this.record= this.record.bind(this);
+        this.record = this.record.bind(this);
         this.applyChange = this.applyChange.bind(this);
         this.clearPretendedChanges = this.clearPretendedChanges.bind(this);
+        this.doAfterTransitionFinish = this.doAfterTransitionFinish.bind(this);
     }
 
     get allSubscribedTopics(): Map<string, Topic<any>> {
@@ -99,7 +102,8 @@ export class StateManager{
             throw new Error(`Topic ${topicName} is not pretended.`);
         }
         let topic = this.getTopic(topicName)
-        this.pendingUnsubscriptions.push(topic);
+        this.topics.delete(topicName);
+        this.topicsToSetDetached.push(topic);
     }
 
     addSubsciption<T extends Topic<any>>(topicName: string, topicType: string|Constructor<T>): T {
@@ -116,24 +120,43 @@ export class StateManager{
         }
         let topic = new t(topicName, this);
         this.topics.set(topicName, topic);
-        print(`Topic ${topicName} added. Now subscribed topics are:`, this.topics.keys());
+        //print(`Topic ${topicName} added. Now subscribed topics are:`, this.topics.keys());
         return topic as T;
     }
 
     /**
      * 
      * @param topicName The name of the topic to be removed.
-     * @returns If the topic is pretended, return true. Otherwise, return false.
+     * @returns If need to notify server, return true. Otherwise, return false.
      */
     removeSubscription(topicName: string): boolean {
         if (!this.topics.has(topicName)) {
-            throw new Error(`Topic ${topicName} is not in the subscription.`);
+            //throw new Error(`Topic ${topicName} is not in the subscription.`);
+            // This may happen when app does redundant clean up.
+            return false;
         }
         let topic = this.getTopic(topicName)
-        this.pendingUnsubscriptions.push(topic);
-        print(`Topic ${topicName} removed. Now subscribed topics are:`, this.topics.keys());
-        return topic.isPretended;
+        this.topics.delete(topicName);
+        this.topicsToSetDetached.push(topic);
+        //print(`Topic ${topicName} removed. Now subscribed topics are:`, this.topics.keys());
+        return !topic.isPretended;
     }
+
+    private setDoingTransition(callback: () => void): void{
+        if (this.isDoingTransition)
+            throw new Error("This function should not be reentrant by logic.");
+        this.isDoingTransition = true;
+        try{
+            callback();
+        }finally{
+            this.isDoingTransition = false;
+            for(const task of this.tasksWaitingTransitionFinish){
+                task();
+            }
+            this.tasksWaitingTransitionFinish = [];
+        }
+    }
+        
 
     getIsRecording(): boolean{
         return this.isRecording;
@@ -146,6 +169,15 @@ export class StateManager{
      * @returns void
      */
     record(callback = () => {}, pretend = false): void{
+
+        // Set isDoingTransition flag.
+        if (!this.isDoingTransition){
+            this.setDoingTransition(() => {
+                this.record(callback,pretend);
+            });
+            return;
+        }
+
         if (this.isRecording) {
             callback();
             return;
@@ -161,6 +193,7 @@ export class StateManager{
             exceptionOccurred = true;
             this.undo(this.recordingPreviewOrPretend.map(x=>x.change))
             this.recordingPreviewOrPretend = [];
+            debugger// To see the stack trace in the console.
             throw e;
         }
         finally{
@@ -187,7 +220,7 @@ export class StateManager{
             this.isRecording = false;
             this._isPretending = false;
 
-            this.processUnsubscriptions();
+            this.processSetDetached();
         }
     }
     
@@ -240,6 +273,14 @@ export class StateManager{
 
     handleUpdate(transition: Change<any>[],actionID:string): void{
         /*Recieve an update from the server.*/
+
+        // Set isDoingTransition flag.
+        if (!this.isDoingTransition){
+            this.setDoingTransition(() => {
+                this.handleUpdate(transition,actionID);
+            });
+            return;
+        }
         
         this.blockApplyChangeContext(() => {
             for (const change of transition){
@@ -270,16 +311,25 @@ export class StateManager{
             this._isPretending = true; // set the flag so the client knows it is pretending, and will not send subscription to the server.
             this._isPretending = false;
         });
-        this.processUnsubscriptions();
+        this.processSetDetached();
     }
 
     handleReject(): void{
+
+        // Set isDoingTransition flag. //TODO: use decorator
+        if (!this.isDoingTransition){
+            this.setDoingTransition(() => {
+                this.handleReject();
+            });
+            return;
+        }
+
         /*Recieve a reject from the server.*/
         this.blockApplyChangeContext(() => {
             this.undo(this.allPreview.map(x => x.change));
             this.allPreview = [];
         });
-        this.processUnsubscriptions();
+        this.processSetDetached();
     }
 
     /**
@@ -287,6 +337,15 @@ export class StateManager{
      * @returns void
      */
     clearPretendedChanges(): void{
+
+        // Set isDoingTransition flag.
+        if (!this.isDoingTransition){
+            this.setDoingTransition(() => {
+                this.clearPretendedChanges();
+            });
+            return;
+        }
+
         if(this.isRecording)
             throw new Error("Cannot clear pretended changes while recording.");
         
@@ -294,7 +353,15 @@ export class StateManager{
             this.undo(this.allPretendedChanges.map(x => x.change));
         });
         this.allPretendedChanges = [];
-        this.processUnsubscriptions();
+        this.processSetDetached();
+    }
+
+    doAfterTransitionFinish(callback: () => void): void{
+        if(this.isDoingTransition){
+            this.tasksWaitingTransitionFinish.push(callback);
+        }else{
+            callback();
+        }
     }
 
     private blockApplyChangeContext(callback: () => void): void{
@@ -323,12 +390,10 @@ export class StateManager{
         });
     }
 
-    private processUnsubscriptions(): void{
-        for(const topic of this.pendingUnsubscriptions){
+    private processSetDetached(): void{
+        for(const topic of this.topicsToSetDetached){
             topic.setDetached();
-            if(this.topics.get(topic.getName()) == topic)
-                this.topics.delete(topic.getName());
         }
-        this.pendingUnsubscriptions = [];
+        this.topicsToSetDetached = [];
     }
 }

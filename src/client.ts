@@ -27,6 +27,7 @@ export class ChatroomClient{
     private pendingSubscriptions: string[] = [];
     record: (callback?: () => void, pretend?: boolean) => void
     clearPretendedChanges: () => void
+    doAfterTransitionFinish: (callback: () => void) => void
     private pretendedTopics: DictTopic<string,string>;
 
     constructor(host: string){
@@ -34,6 +35,7 @@ export class ChatroomClient{
         this.stateManager = new StateManager(this.onActionProduced.bind(this), this.onActionFailed.bind(this));
         this.record = this.stateManager.record;
         this.clearPretendedChanges = this.stateManager.clearPretendedChanges;
+        this.doAfterTransitionFinish = this.stateManager.doAfterTransitionFinish;
         this.clientID = -1;
         this.requestPool = new Map<string, Request>; 
         this.servicePool = new Map<string, (data: any) => void>();
@@ -202,8 +204,8 @@ export class ChatroomClient{
     public unsubscribe(topicName: string, becauseRemoved: boolean = false) {
         if(topicName==="_chatroom/topic_list")
             throw new Error(`Cannot unsubscribe from topic ${topicName}`);
-        let isPretended = this.stateManager.removeSubscription(topicName);
-        if(!isPretended)
+        let notifyServer = this.stateManager.removeSubscription(topicName);
+        if(notifyServer)
             this.sendToServer('unsubscribe', { topic_name: topicName });
     }
 

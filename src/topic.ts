@@ -461,4 +461,13 @@ export class EventTopic extends Topic<null>{
     public emit(args:any): void{
         this.applyChangeExternal(new EventChangeTypes.Emit(this,args));
     }
+
+    protected notifyListenersT(change: Change<null>, oldValue: null, newValue:null): void{
+        super.notifyListenersT(change,oldValue,newValue);
+        if (change instanceof EventChangeTypes.Emit) {
+            this.onEmit.invoke(change.args);
+        } else {
+            throw new Error(`Unsupported change type ${change} for ${this.constructor.name}`);
+        }
+    }
 }
