@@ -36,6 +36,9 @@ export type Callback<ARGS extends any[] = any[], OUT = any> = (...args: ARGS) =>
 
 export class Action<ARGS extends any[], OUT=void> {
     private _callbacks: Callback<ARGS, OUT>[] = [];
+    get numCallbacks(): number {
+        return this._callbacks.length;
+    }
     constructor(){
         this.invoke = this.invoke.bind(this);
     }

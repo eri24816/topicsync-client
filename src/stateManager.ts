@@ -91,6 +91,8 @@ export class StateManager{
         }
         let newTopic = this.addSubsciption(topicName,topicType);
         newTopic.isPretended = true;
+        newTopic.initialized = true;
+        newTopic.onInit.invoke(newTopic.getValue());
         return newTopic;
     }
 

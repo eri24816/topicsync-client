@@ -17,7 +17,7 @@ class Request{
 export class ChatroomClient{
     private readonly ws: WebSocket;
     private readonly stateManager: StateManager;
-    private clientID: Number;
+    private _clientId: number;
     private readonly requestPool: Map<string, Request>;
     private readonly servicePool: Map<string, (data: any) => any>;
     private readonly messageHandlers: Map<string, (data: any) => void>;
@@ -25,6 +25,9 @@ export class ChatroomClient{
     private readonly topicList: DictTopic<string,any>;
     private onConnectCalled: boolean;
     private pendingSubscriptions: string[] = [];
+    get clientId(): number{
+        return this._clientId;
+    }
     record: (callback?: () => void, pretend?: boolean) => void
     clearPretendedChanges: () => void
     doAfterTransitionFinish: (callback: () => void) => void
@@ -36,13 +39,14 @@ export class ChatroomClient{
         this.record = this.stateManager.record;
         this.clearPretendedChanges = this.stateManager.clearPretendedChanges;
         this.doAfterTransitionFinish = this.stateManager.doAfterTransitionFinish;
-        this.clientID = -1;
+        this._clientId = -1;
         this.requestPool = new Map<string, Request>; 
         this.servicePool = new Map<string, (data: any) => void>();
         this.messageHandlers = new Map<string, (data: any) => void>([
             ['hello', this.handleHello.bind(this)],
             ['request', this.handleRequest.bind(this)],
             ['response', this.handleResponse.bind(this)],
+            ['init', this.handleInit.bind(this)],
             ['update', this.handleUpdate.bind(this)],
             ['reject', this.handleReject.bind(this)],
         ]);
@@ -100,7 +104,7 @@ export class ChatroomClient{
     }
 
     private handleHello({id}: {id: number}) {
-        this.clientID = id;
+        this._clientId = id;
         console.debug(`[ChatRoom] Connected to server with client ID ${id}`);
         this.sendToServer('subscribe', { topic_name: "_chatroom/topic_list" });
     }
@@ -122,6 +126,32 @@ export class ChatroomClient{
         const request = defined(this.requestPool.get(requestId));
         this.requestPool.delete(requestId);
         request.onResponse(response);
+    }
+
+    private handleInit({topic_name:topicName,value:value}: {topic_name: string, value: any}) {
+        if(!this.stateManager.hasTopic(topicName))
+            return;
+        const topic = this.stateManager.getTopic(topicName);
+        if(topic instanceof EventTopic)
+            return;
+        
+        let changeDict = {
+            topic_name: topicName,
+            topic_type: "unknown",
+            type: "set",
+            value: value
+        }
+
+        const change = topic.deserializeChange(changeDict);
+        this.stateManager.handleUpdate([change],"init");
+        topic.initialized = true;
+        topic.onInit.invoke(value);
+
+        if (!this.onConnectCalled) {
+            // when server sends the value of _chatroom/topics, client can do things about topics
+            this.onConnectCalled = true;
+            this.onConnect.invoke();
+        }
     }
 
     private handleUpdate({changes,action_id:actionId}: {changes: any[],action_id: string}) {

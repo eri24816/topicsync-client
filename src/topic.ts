@@ -38,6 +38,8 @@ export abstract class Topic<T,TI=T>{
     private validators: Validator<T>[];
     private noPreviewChangeTypes: Set<ConstructorOfChange<T>>;
     public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T> }
+    public initialized: boolean = false; // Managed by ChatroomClient
+    public onInit = new Action<[TI],void>; // Called by ChatroomClient
     public onSet = new Action<[TI],void>;
     public onSet2 = new Action<[TI,TI],void>;
     public isPretended: boolean = false;
@@ -48,6 +50,13 @@ export abstract class Topic<T,TI=T>{
         this.validators = [];
         this.noPreviewChangeTypes = new Set();
         this.detached = false;
+        
+        let originalOnSetAdd = this.onSet.add.bind(this.onSet);
+        this.onSet.add = (callback) => {
+            originalOnSetAdd(callback);
+            if(this.getValue() !== null)
+                callback(this.getValue());
+        }
     }
     public getTypeName(): string{
         return camelToSnake(this.constructor.name.replace('Topic',''));
