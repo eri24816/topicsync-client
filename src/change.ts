@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from "uuid";
+import { IdGenerator } from "./utils";
 import { ValueSet } from "./collection";
 export type ConstructorOfChange<T> = new (...args: any[]) => Change<T>
 
@@ -26,7 +26,7 @@ export abstract class Change<T> {
         if (id) {
             this.id = id;
         } else {
-            this.id = uuidv4();
+            this.id = IdGenerator.generateId();
         }
     }
 

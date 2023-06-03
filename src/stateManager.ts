@@ -1,8 +1,7 @@
 import { print } from "./devUtils";
 import { EventTopic, Topic } from "./topic";
 import { Change } from "./change";
-import { Callback, Constructor, defined } from "./utils";
-import { v4 as uuidv4 } from 'uuid';
+import { Callback, Constructor, IdGenerator, defined } from "./utils";
 
 class StackTracker{
     stack: string[] = [];
@@ -200,7 +199,7 @@ export class StateManager{
         }
         finally{
             if (!exceptionOccurred){
-                const actionID = uuidv4();
+                const actionID = IdGenerator.generateId();
                 if(this._isPretending){
                     for(const previewItem of this.recordingPreviewOrPretend){
                         this.allPretendedChanges.push(previewItem);
@@ -244,7 +243,7 @@ export class StateManager{
         }
 
         // generate a actionID
-        const actionID = uuidv4();
+        const actionID = IdGenerator.generateId();
         if (preview){
             // simulate the transition due to the action.
             this.stackTracker.enter(change.topic.getName(), () => {

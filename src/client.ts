@@ -2,8 +2,7 @@ import { print } from "./devUtils";
 import { StateManager } from "./stateManager";
 import { DictTopic, EventTopic, SetTopic, Topic } from "./topic";
 import { Change } from "./change";
-import { Action, Constructor, defined, json_stringify } from "./utils";
-import { v4 as uuidv4 } from 'uuid';
+import { Action, Constructor, IdGenerator, defined, json_stringify } from "./utils";
 
 class Request{
     id: string;
@@ -105,6 +104,7 @@ export class ChatroomClient{
 
     private handleHello({id}: {id: number}) {
         this._clientId = id;
+        IdGenerator.instance = new IdGenerator(id+'');
         console.debug(`[ChatRoom] Connected to server with client ID ${id}`);
         this.sendToServer('subscribe', { topic_name: "_chatroom/topic_list" });
     }
@@ -166,12 +166,6 @@ export class ChatroomClient{
             changeObjects.push(change);
         }
         this.stateManager.handleUpdate(changeObjects,actionId);
-
-        if (!this.onConnectCalled) {
-            // when server sends the value of _chatroom/topics, client can do things about topics
-            this.onConnectCalled = true;
-            this.onConnect.invoke();
-        }
     }
 
     private handleReject({ reason }: {reason: string }) {
@@ -179,7 +173,7 @@ export class ChatroomClient{
     }
 
     public makeRequest(serviceName: string, args: any, onResponse : (response: any)=>void = ()=>{}): void {
-        const id = uuidv4();
+        const id = IdGenerator.generateId();
         const request = new Request(id, onResponse);
         this.requestPool.set(id, request);
         this.sendToServer('request', { service_name: serviceName, args: args, request_id: id });

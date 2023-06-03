@@ -1,6 +1,6 @@
 {
   "name": "chatroom-client",
-  "version": "0.5.0",
+  "version": "0.5.3",
   "main": "src/index.js",
   "license": "MIT",
   "devDependencies": {
@@ -15,7 +15,6 @@
     "testapp":"npx webpack serve --entry ./src/testApp.ts"
   },
   "dependencies": {
-    "deepcopy": "^2.1.0",
-    "@types/uuid": "^9.0.1"
+    "deepcopy": "^2.1.0"
   }
 }
