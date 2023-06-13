@@ -24,6 +24,7 @@ export class ChatroomClient{
     private readonly topicList: DictTopic<string,any>;
     private onConnectCalled: boolean;
     private pendingSubscriptions: string[] = [];
+    private messagesWaitingForConnect: string[] = [];
     get clientId(): number{
         return this._clientId;
     }
@@ -72,7 +73,11 @@ export class ChatroomClient{
     private sendToServer(messageType: string, args: any) {
         const message = json_stringify({type: messageType, args: args});
         console.debug('<\t'+message);
-        this.ws.send(message);
+        if(this.ws.readyState === WebSocket.CONNECTING){
+            this.messagesWaitingForConnect.push(message);
+        }else{
+            this.ws.send(message);
+        }
     }
 
     private sendSubscribe(topicName: string) {
@@ -151,6 +156,11 @@ export class ChatroomClient{
             // when server sends the value of _chatroom/topics, client can do things about topics
             this.onConnectCalled = true;
             this.onConnect.invoke();
+            
+            for(const message of this.messagesWaitingForConnect){
+                this.ws.send(message);
+            }
+            this.messagesWaitingForConnect = [];
         }
     }
 
