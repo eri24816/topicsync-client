@@ -21,6 +21,9 @@ export abstract class Change<T> {
         this._topic = this._topic.stateManager.getTopic(this._topic.getName());
         return this._topic;
     }
+    get topicName(): string{
+        return this._topic.getName();
+    }
     constructor(topic: Topic<T>,id?: string) {
         this._topic = topic;
         if (id) {

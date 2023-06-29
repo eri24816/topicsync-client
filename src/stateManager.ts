@@ -285,6 +285,10 @@ export class StateManager{
         
         this.blockApplyChangeContext(() => {
             for (const change of transition){
+                
+                
+                if (!this.hasTopic(change.topicName))
+                    continue; // This could happen when a topic is removed from previous changes in the transition.
 
                 if (this.allPreview.length == 0){
                     change.execute();
