@@ -1,5 +1,18 @@
 import { Action, camelToSnake, defined } from './utils';
-import { Change, InvalidChangeException, StringChangeTypes, SetChangeTypes as SetChangeTypes, ConstructorOfChange, IntChangeTypes, FloatChangeTypes, GenericChangeTypes, EventChangeTypes, DictChangeTypes, ListChangeTypes } from './change';
+import {
+    Change,
+    InvalidChangeException,
+    StringChangeTypes,
+    SetChangeTypes as SetChangeTypes,
+    ConstructorOfChange,
+    IntChangeTypes,
+    FloatChangeTypes,
+    GenericChangeTypes,
+    EventChangeTypes,
+    DictChangeTypes,
+    ListChangeTypes,
+    BinaryChangeTypes
+} from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
@@ -479,4 +492,19 @@ export class EventTopic extends Topic<null>{
             throw new Error(`Unsupported change type ${change} for ${this.constructor.name}`);
         }
     }
+}
+
+export class BinaryTopic extends Topic<string, Buffer> {
+    protected _getValue(): Buffer {
+        return Buffer.from(this.value, 'base64');
+    }
+
+    readonly changeTypes: { [p: string]: ConstructorOfChange<string> };
+
+    set(value: Buffer): void {
+        this.applyChangeExternal(new BinaryChangeTypes.Set(this, value.toString('base64')))
+    }
+
+    protected value: string;
+
 }
