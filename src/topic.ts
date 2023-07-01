@@ -496,6 +496,11 @@ export class EventTopic extends Topic<null>{
 }
 
 export class BinaryTopic extends Topic<string, Buffer> {
+
+    get base64(): string {
+        return this.value;
+    }
+
     protected _getValue(): Buffer {
         return Buffer.from(this.value, 'base64');
     }
