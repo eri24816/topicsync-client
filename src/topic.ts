@@ -36,6 +36,7 @@ export abstract class Topic<T,TI=T>{
             dict: DictTopic,
             list: ListTopic,
             event: EventTopic,
+            binary: BinaryTopic
         }
     }
     static GetTypeFromName(name: string): { new(name: string, stateManager: StateManager): Topic<any>; }{
