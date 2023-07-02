@@ -80,8 +80,6 @@ export abstract class Change<T> {
                 return new ListChangeTypes.Insert(topic,rest.index, rest.value, rest.id);
             case ListChangeTypes.Pop:
                 return new ListChangeTypes.Pop(topic,rest.index, rest.id);
-            case BinaryChangeTypes.Set:
-                return new BinaryChangeTypes.Set(topic, rest.value, rest.old_value, rest.id)
             default:
                 throw new Error(`Unknown change type: ${topic.getTypeName()} ${type}`);
         }
@@ -89,7 +87,7 @@ export abstract class Change<T> {
 }
 
 import deepcopy from "deepcopy";
-import {BinaryTopic, Topic} from "./topic";
+import { Topic } from "./topic";
 import { print } from "./devUtils"
 
 interface SetChangeDict extends ChangeDict {
@@ -102,8 +100,7 @@ class SetChange<T> extends Change<T> {
     value: T;
     oldValue?: T; 
 
-    // Change doesn't care of TI but only T of a topic, so we use any in TI
-    constructor(topic:Topic<T, any> ,value: T, old_value?: T, id?: string) {
+    constructor(topic:Topic<T> ,value: T, old_value?: T, id?: string) {
         super(topic,id);
         this.value = value;
         this.oldValue = old_value;
@@ -510,8 +507,4 @@ export namespace EventChangeTypes{
             throw new Error("Cannot inverse an emit change");
         }
     }
-}
-
-export namespace BinaryChangeTypes {
-    export const Set = SetChange<string>;
 }
