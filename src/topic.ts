@@ -10,8 +10,7 @@ import {
     GenericChangeTypes,
     EventChangeTypes,
     DictChangeTypes,
-    ListChangeTypes,
-    BinaryChangeTypes
+    ListChangeTypes
 } from './change';
 import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
@@ -35,8 +34,7 @@ export abstract class Topic<T,TI=T>{
             set: SetTopic,
             dict: DictTopic,
             list: ListTopic,
-            event: EventTopic,
-            binary: BinaryTopic
+            event: EventTopic
         }
     }
     static GetTypeFromName(name: string): { new(name: string, stateManager: StateManager): Topic<any>; }{
@@ -208,6 +206,14 @@ export class StringTopic extends Topic<string>{
 
     public set(value: string): void{
         this.applyChangeExternal(new StringChangeTypes.Set(this,value));
+    }
+
+    public setFromBinary(data: Buffer) {
+        this.set(data.toString('base64'))
+    }
+
+    public toBinary(): Buffer {
+        return Buffer.from(this.getValue(), 'base64')
     }
 }
 
@@ -493,24 +499,4 @@ export class EventTopic extends Topic<null>{
             throw new Error(`Unsupported change type ${change} for ${this.constructor.name}`);
         }
     }
-}
-
-export class BinaryTopic extends Topic<string, Buffer> {
-
-    get base64(): string {
-        return this.value;
-    }
-
-    protected _getValue(): Buffer {
-        return Buffer.from(this.value, 'base64');
-    }
-
-    readonly changeTypes: { [p: string]: ConstructorOfChange<string> };
-
-    set(value: Buffer): void {
-        this.applyChangeExternal(new BinaryChangeTypes.Set(this, value.toString('base64')))
-    }
-
-    protected value: string;
-
 }
