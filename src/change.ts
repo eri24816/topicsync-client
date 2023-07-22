@@ -77,7 +77,7 @@ export abstract class Change<T> {
             case ListChangeTypes.Set:
                 return new ListChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
             case ListChangeTypes.Insert:
-                return new ListChangeTypes.Insert(topic,rest.index, rest.value, rest.id);
+                return new ListChangeTypes.Insert(topic,rest.item, rest.position, rest.id);
             case ListChangeTypes.Pop:
                 return new ListChangeTypes.Pop(topic,rest.index, rest.id);
             default:
