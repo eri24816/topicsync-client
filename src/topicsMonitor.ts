@@ -76,7 +76,7 @@ export class TopicsMonitor{
         this.container.appendChild(this.table);
         this.topicList = client.getTopic<DictTopic<string,any>>('_chatroom/topic_list');
         this.topicList.onAdd.add(this.topicAdded.bind(this));
-        this.topicList.onRemove.add(this.topicRemoved.bind(this));
+        this.topicList.onPop.add(this.topicRemoved.bind(this));
         for(const [topic,props] of this.topicList.getValue().entries()){
             this.topicAdded(topic,props);
         }
@@ -84,14 +84,9 @@ export class TopicsMonitor{
 
     private topicAdded(topic_name:string,props:any): void{
         const topic = this.client.getTopic(topic_name)
-        topic.onSet.add((value) => {
-            //print('topic changed:', topic_name, json_stringify(value));
-            print(`${topic_name} changed to ${json_stringify(value)}`);
-            defined(row.children[2]).textContent = json_stringify(value);
-        });
+        const row = document.createElement('tr');
         this.topics.set(topic_name, topic);
         
-        const row = document.createElement('tr');
         row.innerHTML = `<td>${topic_name}</td><td>${props['type']}</td><td>${json_stringify(topic.getValue())}</td>`;
         // padding left
         for(const cell of row.children as HTMLCollectionOf<HTMLElement>){
@@ -107,6 +102,12 @@ export class TopicsMonitor{
         }
         this.table.insertBefore(row, next);
         this.rows.set(topic_name, row);
+        
+        topic.onSet.add((value) => {
+            //print('topic changed:', topic_name, json_stringify(value));
+            print(`${topic_name} changed to ${json_stringify(value)}`);
+            defined(row.children[2]).textContent = json_stringify(value);
+        });
     }
 
     private topicRemoved(topic_name:string): void{

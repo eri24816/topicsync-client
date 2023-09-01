@@ -57,7 +57,7 @@ export class ChatroomClient{
         this.pretendedTopics.onAdd.add((topicName: string, topicType:string) => {
             this.stateManager.addPretendedTopic(topicName,topicType);
         });
-        this.pretendedTopics.onRemove.add((topicName: string) => {
+        this.pretendedTopics.onPop.add((topicName: string) => {
             this.stateManager.removePretendedTopic(topicName);
         });
         

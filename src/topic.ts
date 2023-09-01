@@ -321,12 +321,12 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
     public changeTypes = {
         'set': DictChangeTypes.Set,
         'add': DictChangeTypes.Add,
-        'remove': DictChangeTypes.Remove,
+        'pop': DictChangeTypes.Pop,
         'change_value': DictChangeTypes.ChangeValue,
     }
     onSet: Action<[Map<K,V>], void>;
     onAdd: Action<[K,V], void>;
-    onRemove: Action<[K], void>;
+    onPop: Action<[K], void>;
     onChangeValue: Action<[K,V], void>;
     protected value: Map<K,V>;
     constructor(name:string,stateManager:StateManager,initValue?:Map<K,V>){
@@ -334,7 +334,7 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
         this.value = new Map<K,V>();
         this.onSet = new Action();
         this.onAdd = new Action();
-        this.onRemove = new Action();
+        this.onPop = new Action();
         this.onChangeValue = new Action();
     }
     protected _getValue(): Map<K,V> {
@@ -351,8 +351,8 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
     public add(key: K, value: V): void{
         this.applyChangeExternal(new DictChangeTypes.Add<K,V>(this,key,value));
     }
-    public remove(key: K): void{
-        this.applyChangeExternal(new DictChangeTypes.Remove<K,V>(this,key));
+    public pop(key: K): void{
+        this.applyChangeExternal(new DictChangeTypes.Pop<K,V>(this,key));
     }
     public changeValue(key: K, value: V): void{
         this.applyChangeExternal(new DictChangeTypes.ChangeValue<K,V>(this,key,value));
@@ -369,7 +369,7 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
             const addedKeys = new Set([...newKeys].filter(x => !oldKeys.has(x)));
             const remainedKeys = new Set([...oldKeys].filter(x => newKeys.has(x)));
             for (const key of removedKeys) {
-                this.onRemove.invoke(key);
+                this.onPop.invoke(key);
             }
             for (const key of addedKeys) {
                 this.onAdd.invoke(key,newValue.get(key)!);
@@ -381,8 +381,8 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
             }
         } else if (change instanceof DictChangeTypes.Add) {
             this.onAdd.invoke(change.key,change.value);
-        } else if (change instanceof DictChangeTypes.Remove) {
-            this.onRemove.invoke(change.key);
+        } else if (change instanceof DictChangeTypes.Pop) {
+            this.onPop.invoke(change.key);
         } else if (change instanceof DictChangeTypes.ChangeValue) {
             this.onChangeValue.invoke(change.key,change.value);
         } else {
@@ -415,7 +415,9 @@ export class ListTopic<V=any> extends Topic<V[]>{
         this.applyChangeExternal(new ListChangeTypes.Set<V>(this,value));
     }
 
-    public insert(item: V, position:number=-1): void{
+    public insert(item: V, position:number=null): void{
+        if (position === null)
+            position = this.value.length;
         this.applyChangeExternal(new ListChangeTypes.Insert<V>(this,item,position));
     }
 

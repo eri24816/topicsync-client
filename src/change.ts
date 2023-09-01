@@ -70,8 +70,8 @@ export abstract class Change<T> {
                 return new DictChangeTypes.Set(topic,new Map(Object.entries(rest.value)), rest.id);
             case DictChangeTypes.Add:
                 return new DictChangeTypes.Add(topic,rest.key, rest.value, rest.id);
-            case DictChangeTypes.Remove:
-                return new DictChangeTypes.Remove(topic,rest.key, rest.id);
+            case DictChangeTypes.Pop:
+                return new DictChangeTypes.Pop(topic,rest.key, rest.id);
             case DictChangeTypes.ChangeValue:
                 return new DictChangeTypes.ChangeValue(topic,rest.key, rest.value, rest.old_value, rest.id);
             case ListChangeTypes.Set:
@@ -79,7 +79,7 @@ export abstract class Change<T> {
             case ListChangeTypes.Insert:
                 return new ListChangeTypes.Insert(topic,rest.item, rest.position, rest.id);
             case ListChangeTypes.Pop:
-                return new ListChangeTypes.Pop(topic,rest.index, rest.id);
+                return new ListChangeTypes.Pop(topic,rest.position, rest.id);
             default:
                 throw new Error(`Unknown change type: ${topic.getTypeName()} ${type}`);
         }
@@ -327,10 +327,10 @@ export namespace DictChangeTypes{
             };
         }
         inverse(): Change<Map<K,V>>{
-            return new Remove(this.topic,this.key);
+            return new Pop(this.topic,this.key);
         }
     }
-    export class Remove<K,V> extends Change<Map<K,V>>{
+    export class Pop<K,V> extends Change<Map<K,V>>{
         key: K;
         value: V|null;
         constructor(topic:Topic<Map<K,V>>, key:K, id?: string) {
@@ -350,7 +350,7 @@ export namespace DictChangeTypes{
             return {
                 topic_name: this.topic.getName(),
                 topic_type: this.topic.getTypeName(),
-                type: "remove",
+                type: "pop",
                 key: this.key,
                 id: this.id,
             };
