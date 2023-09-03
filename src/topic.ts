@@ -299,6 +299,10 @@ export class SetTopic extends Topic<ValueSet,any[]>{
         this.applyChangeExternal(new SetChangeTypes.Remove(this,value));
     }
 
+    public has(value:any){
+        return this.value.has(value)
+    }
+
     protected notifyListenersT(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
         if (change instanceof SetChangeTypes.Set) {
             for(const value of oldValue.toArray())
