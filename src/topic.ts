@@ -16,15 +16,18 @@ import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
 
-type Validator<T> = (oldValue: T, change: Change<T>) => boolean;
+type Validator<T, TI, SubT extends Topic<T, TI, SubT>> = (oldValue: T, change: Change<T, TI, SubT>) => boolean;
 
 interface ChangeDict {
   type: string;
   [key: string]: any;
 }
 
-export abstract class Topic<T,TI=T>{
-    static getTypeDict(): {[key:string]:{ new(name: string, stateManager: StateManager): Topic<any>; }}
+class A {}
+class B extends A {}
+
+export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, TI, any>>{
+    static getTypeDict(): {[key:string]:{ new(name: string, stateManager: StateManager): Topic<any, any, any>; }}
     {
         return {
             generic: GenericTopic,
@@ -47,9 +50,9 @@ export abstract class Topic<T,TI=T>{
     protected abstract value: T;
     private _stateManager: StateManager;
     get stateManager(): StateManager{return this._stateManager;}
-    private validators: Validator<T>[];
-    private noPreviewChangeTypes: Set<ConstructorOfChange<T>>;
-    public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T> }
+    private validators: Validator<T, TI, SubT>[];
+    private noPreviewChangeTypes: Set<ConstructorOfChange<T, TI, SubT>>;
+    public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T, TI, SubT> }
     public initialized: boolean = false; // Managed by ChatroomClient
     public onInit = new Action<[TI],void>; // Called by ChatroomClient
     public onSet = new Action<[TI],void>;
@@ -85,11 +88,11 @@ export abstract class Topic<T,TI=T>{
 
     protected abstract _getValue(): TI;
 
-    public addValidator(validator: Validator<T>): void{
+    public addValidator(validator: Validator<T, TI, SubT>): void{
         this.validators.push(validator);
     }
 
-    public disablePreview(changeType?: ConstructorOfChange<T>): void{
+    public disablePreview(changeType?: ConstructorOfChange<T, TI, SubT>): void{
         if (changeType === undefined) {
             this.noPreviewChangeTypes = new Set(Object.values(this.changeTypes));
         }
@@ -98,7 +101,7 @@ export abstract class Topic<T,TI=T>{
         }
     }
 
-    public enablePreview(changeType?: ConstructorOfChange<T>): void{
+    public enablePreview(changeType?: ConstructorOfChange<T, TI, SubT>): void{
         if (changeType === undefined) {
             this.noPreviewChangeTypes.clear();
         }
@@ -109,14 +112,14 @@ export abstract class Topic<T,TI=T>{
 
     public abstract set(value:TI): void;
     
-    protected notifyListeners(change: Change<T>, oldValue: TI, newValue: TI): void{
+    protected notifyListeners(change: Change<T, TI, SubT>, oldValue: TI, newValue: TI): void{
         this.onSet.invoke(this.getValue());
         this.onSet2.invoke(oldValue,this.getValue());
     }
 
-    protected notifyListenersT(change: Change<T>, oldValue: T, newValue: T): void{}
+    protected notifyListenersT(change: Change<T, TI, SubT>, oldValue: T, newValue: T): void{}
 
-    private validateChange(change: Change<T>): void{
+    private validateChange(change: Change<T, TI, SubT>): void{
         const oldValue = this.value;
         for (const validator of this.validators) {
             if (!validator(oldValue, change)) {
@@ -125,7 +128,7 @@ export abstract class Topic<T,TI=T>{
         }
     }
 
-    public applyChange(change: Change<T>): void{
+    public applyChange(change: Change<T, TI, SubT>): void{
         this.checkDetached()
         this.validateChange(change);
         const oldValueTI = this.getValue();
@@ -137,7 +140,8 @@ export abstract class Topic<T,TI=T>{
         this.notifyListeners(change, oldValueTI, newValueTI);
     }
 
-    public applyChangeExternal(change: Change<T>): void{
+    // kind of cheat here, relaxing the type constraint of SubT to any makes Set-related changes easier
+    public applyChangeExternal(change: Change<T, TI, any>): void{
         this.checkDetached();
         this.validateChange(change);
         let preview = true;
@@ -172,9 +176,9 @@ export abstract class Topic<T,TI=T>{
     }
 }
 
-export class GenericTopic<T> extends Topic<T>{
-    public changeTypes = {
-        'set': GenericChangeTypes.Set<T>,
+export class GenericTopic<T> extends Topic<T, T, GenericTopic<T>>{
+    public changeTypes: { [key: string]: ConstructorOfChange<T, T, GenericTopic<T>> } = {
+        'set': GenericChangeTypes.Set<T, GenericTopic<T>>,
     }
     protected value!: T
     constructor(name:string,stateManager:StateManager){
@@ -186,11 +190,11 @@ export class GenericTopic<T> extends Topic<T>{
     }
 
     public set(value: T): void{
-        this.applyChangeExternal(new GenericChangeTypes.Set(this,value));
+        this.applyChangeExternal(new GenericChangeTypes.Set<T>(this, { value: value }));
     }
 }
 
-export class StringTopic extends Topic<string>{
+export class StringTopic extends Topic<string, string, StringTopic>{
     public changeTypes = {
         'set': StringChangeTypes.Set,
     }
@@ -205,7 +209,7 @@ export class StringTopic extends Topic<string>{
     }
 
     public set(value: string): void{
-        this.applyChangeExternal(new StringChangeTypes.Set(this,value));
+        this.applyChangeExternal(new StringChangeTypes.Set(this, { value: value }));
     }
 
     public setFromBinary(data: Buffer) {
@@ -233,11 +237,11 @@ export class IntTopic extends Topic<number>{
     }
 
     public set(value: number): void{
-        this.applyChangeExternal(new IntChangeTypes.Set(this,value));
+        this.applyChangeExternal(new IntChangeTypes.Set(this, { value: value }));
     }
 
     public add(value: number): void{
-        this.applyChangeExternal(new IntChangeTypes.Add(this,value));
+        this.applyChangeExternal(new IntChangeTypes.Add(this, { value: value }));
     }
 }
 
@@ -257,16 +261,16 @@ export class FloatTopic extends Topic<number>{
     }
 
     public set(value: number): void{
-        this.applyChangeExternal(new FloatChangeTypes.Set(this,value));
+        this.applyChangeExternal(new FloatChangeTypes.Set(this, { value: value }));
     }
 
     public add(value: number): void{
-        this.applyChangeExternal(new FloatChangeTypes.Add(this,value));
+        this.applyChangeExternal(new FloatChangeTypes.Add(this, { value: value }));
     }
 }
 
 export class SetTopic extends Topic<ValueSet,any[]>{
-    public changeTypes = {
+    public changeTypes: { [key: string]: ConstructorOfChange<ValueSet, any[]> } = {
         'set': SetChangeTypes.Set,
         'append': SetChangeTypes.Append,
         'remove': SetChangeTypes.Remove,
@@ -288,22 +292,22 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     }
 
     public set(value: any[]): void{
-        this.applyChangeExternal(new SetChangeTypes.Set(this,value));
+        this.applyChangeExternal(new SetChangeTypes.Set(this, { value: value }));
     }
 
     public append(value: any): void{
-        this.applyChangeExternal(new SetChangeTypes.Append(this,value));
+        this.applyChangeExternal(new SetChangeTypes.Append(this, { item: value }));
     }
 
     public remove(value: any): void{
-        this.applyChangeExternal(new SetChangeTypes.Remove(this,value));
+        this.applyChangeExternal(new SetChangeTypes.Remove(this, { item: value }));
     }
 
     public has(value:any){
         return this.value.has(value)
     }
 
-    protected notifyListenersT(change: Change<ValueSet>, oldValue: ValueSet, newValue: ValueSet): void{
+    protected notifyListenersT(change: Change<ValueSet, any[]>, oldValue: ValueSet, newValue: ValueSet): void{
         if (change instanceof SetChangeTypes.Set) {
             for(const value of oldValue.toArray())
                 if (!newValue.has(value))
@@ -346,20 +350,20 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
     }
     public set(value: Map<K,V>|any): void{
         if (value instanceof Map) {
-            this.applyChangeExternal(new DictChangeTypes.Set<K,V>(this,value));
+            this.applyChangeExternal(new DictChangeTypes.Set<K,V>(this, { value: value }));
         }
         else {
-            this.applyChangeExternal(new DictChangeTypes.Set<K,V>(this,new Map(Object.entries(value)) as Map<K,V>));
+            this.applyChangeExternal(new DictChangeTypes.Set<K,V>(this, { value: new Map(Object.entries(value)) as Map<K,V> }));
         }
     }
     public add(key: K, value: V): void{
-        this.applyChangeExternal(new DictChangeTypes.Add<K,V>(this,key,value));
+        this.applyChangeExternal(new DictChangeTypes.Add<K,V>(this, { key: key, value: value }));
     }
     public pop(key: K): void{
-        this.applyChangeExternal(new DictChangeTypes.Pop<K,V>(this,key));
+        this.applyChangeExternal(new DictChangeTypes.Pop<K,V>(this, { key: key }));
     }
     public changeValue(key: K, value: V): void{
-        this.applyChangeExternal(new DictChangeTypes.ChangeValue<K,V>(this,key,value));
+        this.applyChangeExternal(new DictChangeTypes.ChangeValue<K,V>(this, { key: key, value: value }));
     }
     public get(key: K): V {
         return defined(this.value.get(key));
@@ -416,24 +420,24 @@ export class ListTopic<V=any> extends Topic<V[]>{
     }
 
     public set(value: V[]): void{
-        this.applyChangeExternal(new ListChangeTypes.Set<V>(this,value));
+        this.applyChangeExternal(new ListChangeTypes.Set<V>(this, { value: value }));
     }
 
     public insert(item: V, position:number=null): void{
         if (position === null)
             position = this.value.length;
-        this.applyChangeExternal(new ListChangeTypes.Insert<V>(this,item,position));
+        this.applyChangeExternal(new ListChangeTypes.Insert<V>(this, { item: item, position: position }));
     }
 
     public pop(position:number=-1): V{
         let item = this.value[position];
-        this.applyChangeExternal(new ListChangeTypes.Pop<V>(this,position));
+        this.applyChangeExternal(new ListChangeTypes.Pop<V>(this, { position: position }));
         return item;
     }
 
     public remove(item: V): void{
         const position = this.value.indexOf(item);
-        this.applyChangeExternal(new ListChangeTypes.Pop<V>(this,position));
+        this.applyChangeExternal(new ListChangeTypes.Pop<V>(this, { position: position }));
     }
 
     public get length(): number{
@@ -494,7 +498,7 @@ export class EventTopic extends Topic<null>{
     }
 
     public emit(args:any): void{
-        this.applyChangeExternal(new EventChangeTypes.Emit(this,args));
+        this.applyChangeExternal(new EventChangeTypes.Emit(this, { args: args }));
     }
 
     protected notifyListenersT(change: Change<null>, oldValue: null, newValue:null): void{
