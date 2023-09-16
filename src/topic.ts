@@ -199,9 +199,11 @@ export class StringTopic extends Topic<string, string, StringTopic>{
         'set': StringChangeTypes.Set,
     }
     protected value: string;
+    private _version: string
     constructor(name:string,stateManager:StateManager){
         super(name,stateManager);
         this.value = '';
+        this._version = `${this.getName()}_init`
     }
 
     protected _getValue(): string {
@@ -212,12 +214,35 @@ export class StringTopic extends Topic<string, string, StringTopic>{
         this.applyChangeExternal(new StringChangeTypes.Set(this, { value: value }));
     }
 
+    public insert(position: number, insertion: string) {
+        this.applyChangeExternal(new StringChangeTypes.Insert(this, {
+            topic_version: this.version, position: position, insertion: insertion
+        }))
+    }
+
+    public del(position: number, deletion: string) {
+        this.applyChangeExternal(new StringChangeTypes.Delete(this, {
+            topic_version: this.version, position: position, deletion: deletion
+        }))
+    }
+
     public setFromBinary(data: Buffer) {
         this.set(data.toString('base64'))
     }
 
     public toBinary(): Buffer {
         return Buffer.from(this.getValue(), 'base64')
+    }
+
+    public updateVersion(from: string, to: string) {
+        if (this._version !== from) {
+            throw new Error(`Topic version doesn't match. Update required version: ${from}; actual version: ${this.version}`)
+        }
+        this._version = to
+    }
+
+    public get version(): string {
+        return this._version
     }
 }
 
