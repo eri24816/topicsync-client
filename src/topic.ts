@@ -16,7 +16,7 @@ import {StateManager} from './stateManager';
 import deepcopy from 'deepcopy';
 import { ValueSet } from './collection';
 
-type Validator<T, TI, SubT extends Topic<T, TI, SubT>> = (oldValue: T, change: Change<T, TI, SubT>) => boolean;
+type Validator<T, TI> = (oldValue: T, change: Change<T, TI>) => boolean;
 
 interface ChangeDict {
   type: string;
@@ -26,8 +26,8 @@ interface ChangeDict {
 class A {}
 class B extends A {}
 
-export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, TI, any>>{
-    static getTypeDict(): {[key:string]:{ new(name: string, stateManager: StateManager): Topic<any, any, any>; }}
+export abstract class Topic<T,TI=T>{
+    static getTypeDict(): {[key:string]:{ new(name: string, stateManager: StateManager): Topic<any>; }}
     {
         return {
             generic: GenericTopic,
@@ -50,9 +50,9 @@ export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, T
     protected abstract value: T;
     private _stateManager: StateManager;
     get stateManager(): StateManager{return this._stateManager;}
-    private validators: Validator<T, TI, SubT>[];
-    private noPreviewChangeTypes: Set<ConstructorOfChange<T, TI, SubT>>;
-    public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T, TI, SubT> }
+    private validators: Validator<T, TI>[];
+    private noPreviewChangeTypes: Set<ConstructorOfChange<T, TI>>;
+    public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T, TI> }
     public initialized: boolean = false; // Managed by ChatroomClient
     public onInit = new Action<[TI],void>; // Called by ChatroomClient
     public onSet = new Action<[TI],void>;
@@ -88,11 +88,11 @@ export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, T
 
     protected abstract _getValue(): TI;
 
-    public addValidator(validator: Validator<T, TI, SubT>): void{
+    public addValidator(validator: Validator<T, TI>): void{
         this.validators.push(validator);
     }
 
-    public disablePreview(changeType?: ConstructorOfChange<T, TI, SubT>): void{
+    public disablePreview(changeType?: ConstructorOfChange<T, TI>): void{
         if (changeType === undefined) {
             this.noPreviewChangeTypes = new Set(Object.values(this.changeTypes));
         }
@@ -101,7 +101,7 @@ export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, T
         }
     }
 
-    public enablePreview(changeType?: ConstructorOfChange<T, TI, SubT>): void{
+    public enablePreview(changeType?: ConstructorOfChange<T, TI>): void{
         if (changeType === undefined) {
             this.noPreviewChangeTypes.clear();
         }
@@ -112,14 +112,14 @@ export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, T
 
     public abstract set(value:TI): void;
     
-    protected notifyListeners(change: Change<T, TI, SubT>, oldValue: TI, newValue: TI): void{
+    protected notifyListeners(change: Change<T, TI>, oldValue: TI, newValue: TI): void{
         this.onSet.invoke(this.getValue());
         this.onSet2.invoke(oldValue,this.getValue());
     }
 
-    protected notifyListenersT(change: Change<T, TI, SubT>, oldValue: T, newValue: T): void{}
+    protected notifyListenersT(change: Change<T, TI>, oldValue: T, newValue: T): void{}
 
-    private validateChange(change: Change<T, TI, SubT>): void{
+    private validateChange(change: Change<T, TI>): void{
         const oldValue = this.value;
         for (const validator of this.validators) {
             if (!validator(oldValue, change)) {
@@ -128,7 +128,7 @@ export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, T
         }
     }
 
-    public applyChange(change: Change<T, TI, SubT>): void{
+    public applyChange(change: Change<T, TI>): void{
         this.checkDetached()
         this.validateChange(change);
         const oldValueTI = this.getValue();
@@ -176,7 +176,7 @@ export abstract class Topic<T,TI=T, SubT extends Topic<T, TI, SubT> = Topic<T, T
     }
 }
 
-export class GenericTopic<T> extends Topic<T, T, GenericTopic<T>>{
+export class GenericTopic<T> extends Topic<T, T>{
     public changeTypes: { [key: string]: ConstructorOfChange<T, T, GenericTopic<T>> } = {
         'set': GenericChangeTypes.Set<T, GenericTopic<T>>,
     }
@@ -194,7 +194,7 @@ export class GenericTopic<T> extends Topic<T, T, GenericTopic<T>>{
     }
 }
 
-export class StringTopic extends Topic<string, string, StringTopic>{
+export class StringTopic extends Topic<string>{
     public changeTypes = {
         'set': StringChangeTypes.Set,
     }

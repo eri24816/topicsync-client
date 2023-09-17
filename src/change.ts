@@ -1,7 +1,7 @@
 import { IdGenerator } from "./utils";
 import { ValueSet } from "./collection";
 import * as diff from "./stringDiff"
-export type ConstructorOfChange<T, TI = T, TopicT extends Topic<T, TI, TopicT> = Topic<T, TI, any>> = new (...args: any[]) => Change<T, TI, TopicT>
+export type ConstructorOfChange<T, TI = T, TopicT extends Topic<T, TI> = Topic<T, TI>> = new (...args: any[]) => Change<T, TI, TopicT>
 
 export class InvalidChangeException extends Error {
     constructor(message?: string) {
@@ -15,7 +15,7 @@ interface ChangeDict {
     [key: string]: any;
 }
 
-export abstract class Change<T, TI = T, TopicT extends Topic<T, TI, TopicT> = Topic<T, TI, any>> {
+export abstract class Change<T, TI = T, TopicT extends Topic<T, TI> = Topic<T, TI>> {
     id: string;
     private _topic: TopicT;
     get topic(): TopicT {
@@ -46,8 +46,8 @@ export abstract class Change<T, TI = T, TopicT extends Topic<T, TI, TopicT> = To
 
     abstract inverse(): Change<T, TI, TopicT>;
 
-    public static deserialize<T, TI, TopicT extends Topic<T, TI, TopicT>>(
-        topic: Topic<T, TI, TopicT>,
+    public static deserialize<T, TI, TopicT extends Topic<T, TI>>(
+        topic: Topic<T, TI>,
         changeType: ConstructorOfChange<T, TI, TopicT>,
         changeDict: ChangeDict
     ): Change<any> {
@@ -66,7 +66,7 @@ interface SetChangeDict extends ChangeDict {
     old_value: any;
 }
 
-class SetChange<T, TopicT extends Topic<T, T, TopicT> = Topic<T, T, any>> extends Change<T, T, TopicT> {
+class SetChange<T, TopicT extends Topic<T, T> = Topic<T, T>> extends Change<T, T, TopicT> {
     value: T;
     oldValue?: T; 
     constructor(topic: TopicT, {value, old_value, id}: {value: T, old_value?: T, id?: string}) {
@@ -356,9 +356,13 @@ export namespace DictChangeTypes{
     export class Set<K,V> extends Change<Map<K,V>>{
         value: Map<K,V>;
         oldValue: Map<K,V>|null;
-        constructor(topic:Topic<Map<K,V>>, { value, id }: { value:Map<K,V>, id?: string }) {
+        constructor(topic:Topic<Map<K,V>>, { value, id }: { value:Map<K,V>|object, id?: string }) {
             super(topic,id);
-            this.value = value;
+            if(value instanceof Map){
+                this.value = value;
+            }else{
+                this.value = new Map(Object.entries(value)) as Map<K,V>; // Assume that the type were verified by the server.
+            }
             this.oldValue = null;
         }
         apply(oldValue: Map<K,V>): Map<K,V> {
