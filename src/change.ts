@@ -1,5 +1,6 @@
 import { IdGenerator } from "./utils";
 import { ValueSet } from "./collection";
+import * as diff from "./stringDiff"
 export type ConstructorOfChange<T, TI = T, TopicT extends Topic<T, TI, TopicT> = Topic<T, TI, any>> = new (...args: any[]) => Change<T, TI, TopicT>
 
 export class InvalidChangeException extends Error {
@@ -105,7 +106,114 @@ export namespace GenericChangeTypes    {
 }
 
 export namespace StringChangeTypes    {
-    export class Set extends SetChange<string, StringTopic> {}
+    export class Set extends SetChange<string, StringTopic> {
+
+        constructor(topic: StringTopic, { value, old_value, id }: { value: string, old_value?: string, id?: string }) {
+            super(topic, { value: value, old_value: old_value, id: id });
+        }
+
+        apply(oldValue: string): string {
+            this.topic.updateVersion(this.topic.version, this.id)
+            return super.apply(oldValue);
+        }
+    }
+
+    export class Insert extends Change<string, string, StringTopic> {
+
+        private readonly topicVersion: string
+        private readonly position: number
+        private readonly insertion: string
+        private readonly resultTopicVersion: string
+        constructor(topic: StringTopic,
+                    { topic_version, position, insertion, result_topic_version, id } : { topic_version: string, position: number, insertion: string, result_topic_version?: string, id?: string }) {
+            super(topic, id)
+            this.topicVersion = topic_version
+            this.position = position
+            this.insertion = insertion
+            this.resultTopicVersion = result_topic_version ?? IdGenerator.generateId()
+        }
+
+
+        apply(oldValue: string): string {
+            try {
+                this.topic.updateVersion(this.topicVersion, this.resultTopicVersion)
+                return diff.insert(oldValue, this.position, this.insertion)
+            } catch (e) {
+                if (e instanceof Error) {
+                    throw new InvalidChangeException(e.message)
+                } else {
+                    throw new InvalidChangeException(`unknown error happens at insert. ${e.toString()}`)
+                }
+            }
+        }
+
+        inverse(): Change<string, string, StringTopic> {
+            return new StringChangeTypes.Delete(this.topic,
+                {
+                    topic_version: this.resultTopicVersion, position: this.position, deletion: this.insertion, result_topic_version: this.topicVersion
+                })
+        }
+
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "insert",
+                topic_version: this.topicVersion,
+                position: this.position,
+                insertion: this.insertion,
+                result_topic_version: this.resultTopicVersion,
+                id: this.id
+            };
+        }
+
+    }
+
+    export class Delete extends Change<string, string, StringTopic> {
+        private readonly topicVersion: string
+        private readonly position: number
+        private readonly deletion: string
+        private readonly resultTopicVersion: string
+        constructor(topic: StringTopic, { topic_version, position, deletion, result_topic_version, id }: { topic_version: string, position: number, deletion: string, result_topic_version?: string, id?: string }) {
+            super(topic, id)
+            this.topicVersion = topic_version
+            this.position = position
+            this.deletion = deletion
+            this.resultTopicVersion = result_topic_version ?? IdGenerator.generateId()
+        }
+
+        apply(oldValue: string): string {
+            try {
+                this.topic.updateVersion(this.topicVersion, this.resultTopicVersion)
+                return diff.del(oldValue, this.position, this.deletion)
+            } catch (e) {
+                if (e instanceof Error) {
+                    throw new InvalidChangeException(e.message)
+                } else {
+                    throw new InvalidChangeException(`unknown error happens at insert. ${e.toString()}`)
+                }
+            }
+        }
+
+        inverse(): Change<string, string, StringTopic> {
+            return new StringChangeTypes.Insert(this.topic, {
+                topic_version: this.resultTopicVersion, position: this.position, insertion: this.deletion, result_topic_version: this.topicVersion })
+        }
+
+        serialize(): ChangeDict {
+            return {
+                topic_name: this.topic.getName(),
+                topic_type: this.topic.getTypeName(),
+                type: "delete",
+                topic_version: this.topicVersion,
+                position: this.position,
+                deletion: this.deletion,
+                result_topic_version: this.resultTopicVersion,
+                id: this.id
+            };
+        }
+
+    }
 }
 
 export namespace IntChangeTypes    {

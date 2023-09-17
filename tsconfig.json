@@ -2,7 +2,7 @@
   "compilerOptions": {
 
     "outDir": "./dist/js",
-    "rootDir": "./src", 
+    "rootDirs": ["./src", "./test"],
     "sourceRoot": "/src",
     "sourceMap": true,
     /* Visit https://aka.ms/tsconfig to read more about this file */
