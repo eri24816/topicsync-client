@@ -50,9 +50,10 @@ export class Action<ARGS extends any[], OUT=void> {
         const index = this._callbacks.indexOf(callback);
         if (index >= 0) {
             this._callbacks.splice(index, 1);
-        }else{
-            throw new Error('callback not found');
         }
+        // else{
+        //     throw new Error('callback not found');
+        // }
     }
 
     invoke(...args: ARGS): OUT[] {
