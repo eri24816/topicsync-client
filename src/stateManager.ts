@@ -48,6 +48,7 @@ export class StateManager{
     private topicsToSetDetached: Topic<any>[] = [];
     private isDoingTransition: boolean = false; // True if the state manager is recording or handling reject/update from server.
     private tasksWaitingTransitionFinish: (() => void)[] = []; //some task (like UI initialization) may need to wait for the transition to finish to get the correct state.
+    private currentActionID: string = null;
 
     constructor(onActionProduced: (action:Change<any>[],actionID:string) => void, onActionFailed: () => void) {
         this.topics = new Map<string, Topic<any>>();
@@ -187,6 +188,7 @@ export class StateManager{
         this.isRecording = true;
         this._isPretending = pretend;
         let exceptionOccurred = false;
+        this.currentActionID = IdGenerator.generateId();
         try{
             callback();
         }
@@ -199,7 +201,6 @@ export class StateManager{
         }
         finally{
             if (!exceptionOccurred){
-                const actionID = IdGenerator.generateId();
                 if(this._isPretending){
                     for(const previewItem of this.recordingPreviewOrPretend){
                         this.allPretendedChanges.push(previewItem);
@@ -210,7 +211,7 @@ export class StateManager{
                     }
                 }
                 if(!this._isPretending)
-                    this.onActionProduced(this.recordingAction,actionID);
+                    this.onActionProduced(this.recordingAction,this.currentActionID);
             }
             else{
                 if(!this._isPretending)
@@ -243,13 +244,12 @@ export class StateManager{
         }
 
         // generate a actionID
-        const actionID = IdGenerator.generateId();
         if (preview){
             // simulate the transition due to the action.
             this.stackTracker.enter(change.topic.getName(), () => {
                 this.recursionDepth++;
                 
-                this.recordingPreviewOrPretend.push(new PreviewItem(actionID,change));
+                this.recordingPreviewOrPretend.push(new PreviewItem(this.currentActionID,change));
                 try{
                     change.execute();
                 }

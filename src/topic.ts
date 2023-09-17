@@ -522,7 +522,7 @@ export class EventTopic extends Topic<null>{
         throw new Error('You cannot set the value of an event topic.');
     }
 
-    public emit(args:any): void{
+    public emit(args:any={}): void{
         this.applyChangeExternal(new EventChangeTypes.Emit(this, { args: args }));
     }
 
