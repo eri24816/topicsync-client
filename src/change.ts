@@ -1,6 +1,6 @@
 import { IdGenerator } from "./utils";
 import { ValueSet } from "./collection";
-export type ConstructorOfChange<T> = new (...args: any[]) => Change<T>
+export type ConstructorOfChange<T, TI = T, TopicT extends Topic<T, TI, TopicT> = Topic<T, TI, any>> = new (...args: any[]) => Change<T, TI, TopicT>
 
 export class InvalidChangeException extends Error {
     constructor(message?: string) {
@@ -14,17 +14,19 @@ interface ChangeDict {
     [key: string]: any;
 }
 
-export abstract class Change<T> {
+export abstract class Change<T, TI = T, TopicT extends Topic<T, TI, TopicT> = Topic<T, TI, any>> {
     id: string;
-    private _topic: Topic<T>;
-    get topic(): Topic<T> {
-        this._topic = this._topic.stateManager.getTopic(this._topic.getName());
+    private _topic: TopicT;
+    get topic(): TopicT {
+        // force casting here, we assume that the type of topic will remain the same even if
+        // it was deleted and then added
+        this._topic = this._topic.stateManager.getTopic(this._topic.getName()) as unknown as TopicT;
         return this._topic;
     }
     get topicName(): string{
         return this._topic.getName();
     }
-    constructor(topic: Topic<T>,id?: string) {
+    constructor(topic: TopicT,id?: string) {
         this._topic = topic;
         if (id) {
             this.id = id;
@@ -41,53 +43,20 @@ export abstract class Change<T> {
 
     abstract serialize(): ChangeDict;
 
-    abstract inverse(): Change<T>;
+    abstract inverse(): Change<T, TI, TopicT>;
 
-    public static deserialize(
-        topic: Topic<any>,
-        changeType: ConstructorOfChange<any>,
+    public static deserialize<T, TI, TopicT extends Topic<T, TI, TopicT>>(
+        topic: Topic<T, TI, TopicT>,
+        changeType: ConstructorOfChange<T, TI, TopicT>,
         changeDict: ChangeDict
     ): Change<any> {
         const { type, ...rest } = changeDict;
-        switch (changeType) {
-            case StringChangeTypes.Set:
-                return new StringChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
-            case IntChangeTypes.Set:
-                return new IntChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
-            case IntChangeTypes.Add:
-                return new IntChangeTypes.Add(topic,rest.value, rest.id);
-            case FloatChangeTypes.Set:
-                return new FloatChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
-            case FloatChangeTypes.Add:
-                return new FloatChangeTypes.Add(topic,rest.value, rest.id);
-            case SetChangeTypes.Set:
-                return new SetChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
-            case SetChangeTypes.Append:
-                return new SetChangeTypes.Append(topic,rest.item, rest.id);
-            case SetChangeTypes.Remove:
-                return new SetChangeTypes.Remove(topic,rest.item, rest.id);
-            case DictChangeTypes.Set:
-                return new DictChangeTypes.Set(topic,new Map(Object.entries(rest.value)), rest.id);
-            case DictChangeTypes.Add:
-                return new DictChangeTypes.Add(topic,rest.key, rest.value, rest.id);
-            case DictChangeTypes.Pop:
-                return new DictChangeTypes.Pop(topic,rest.key, rest.id);
-            case DictChangeTypes.ChangeValue:
-                return new DictChangeTypes.ChangeValue(topic,rest.key, rest.value, rest.old_value, rest.id);
-            case ListChangeTypes.Set:
-                return new ListChangeTypes.Set(topic,rest.value, rest.old_value, rest.id);
-            case ListChangeTypes.Insert:
-                return new ListChangeTypes.Insert(topic,rest.item, rest.position, rest.id);
-            case ListChangeTypes.Pop:
-                return new ListChangeTypes.Pop(topic,rest.position, rest.id);
-            default:
-                throw new Error(`Unknown change type: ${topic.getTypeName()} ${type}`);
-        }
+        return new changeType(topic, rest)
     }
 }
 
 import deepcopy from "deepcopy";
-import { Topic } from "./topic";
+import {StringTopic, Topic} from "./topic";
 import { print } from "./devUtils"
 
 interface SetChangeDict extends ChangeDict {
@@ -96,11 +65,10 @@ interface SetChangeDict extends ChangeDict {
     old_value: any;
 }
 
-class SetChange<T> extends Change<T> {
+class SetChange<T, TopicT extends Topic<T, T, TopicT> = Topic<T, T, any>> extends Change<T, T, TopicT> {
     value: T;
     oldValue?: T; 
-
-    constructor(topic:Topic<T> ,value: T, old_value?: T, id?: string) {
+    constructor(topic: TopicT, {value, old_value, id}: {value: T, old_value?: T, id?: string}) {
         super(topic,id);
         this.value = value;
         this.oldValue = old_value;
@@ -122,11 +90,13 @@ class SetChange<T> extends Change<T> {
         };
     }
 
-    inverse(): Change<T> {
+    inverse(): Change<T, T, TopicT> {
         if (this.oldValue === undefined) {
             throw new InvalidChangeException(`Cannot inverse SetChange before it is applied. Topic: ${this.topic.getName()}`);
         }
-        return new SetChange<T>(this.topic,deepcopy(this.oldValue), deepcopy(this.value));
+        return new SetChange<T, TopicT>(this.topic,
+            { value: deepcopy(this.oldValue), old_value: deepcopy(this.value) }
+        );
     }
 }
 
@@ -135,14 +105,14 @@ export namespace GenericChangeTypes    {
 }
 
 export namespace StringChangeTypes    {
-    export const Set = SetChange<string>;
+    export class Set extends SetChange<string, StringTopic> {}
 }
 
 export namespace IntChangeTypes    {
     export const Set = SetChange<number>;
     export class Add extends Change<number> {
         value: number;
-        constructor(topic:Topic<number>, value: number, id?: string) {
+        constructor(topic:Topic<number>, { value, id }: { value : number, id?: string }) {
             super(topic,id);
             this.value = value;
         }
@@ -159,7 +129,7 @@ export namespace IntChangeTypes    {
             };
         }
         inverse(): Change<number> {
-            return new Add(this.topic,-this.value);
+            return new Add(this.topic,{ value: -this.value });
         }
     }
 }
@@ -168,7 +138,7 @@ export namespace FloatChangeTypes    {
     export const Set = SetChange<number>;
     export class Add extends Change<number> {
         value: number;
-        constructor(topic:Topic<number>, value: number, id?: string) {
+        constructor(topic:Topic<number>, { value, id }: { value: number, id?: string }) {
             super(topic,id);
             this.value = value;
         }
@@ -185,16 +155,16 @@ export namespace FloatChangeTypes    {
             };
         }
         inverse(): Change<number> {
-            return new Add(this.topic,-this.value);
+            return new Add(this.topic, { value: -this.value });
         }
     }
 }
 
 export namespace SetChangeTypes    {
-    export class Set extends Change<ValueSet> {
+    export class Set extends Change<ValueSet, any[]> {
         value: ValueSet;
         oldValue?: ValueSet;
-        constructor(topic:Topic<ValueSet,any>, value: any[], old_value?: any[], id?: string) {
+        constructor(topic:Topic<ValueSet,any[]>, {value, old_value, id}: { value: any[], old_value?: any[], id?: string }) {
             super(topic,id);
             this.value = new ValueSet(value);
             this.oldValue = old_value ? new ValueSet(old_value) : undefined;
@@ -213,18 +183,18 @@ export namespace SetChangeTypes    {
                 id: this.id,
             };
         }
-        inverse(): Change<ValueSet> {
+        inverse(): Change<ValueSet, any[]> {
             if (this.oldValue === undefined) {
                 throw new InvalidChangeException(`Cannot inverse the change before it is applied. Topic: ${this.topic.getName()}`);
             }
-            return new Set(this.topic,this.oldValue.toArray(), this.value.toArray()); 
+            return new Set(this.topic, { value: this.oldValue.toArray(), old_value: this.value.toArray() });
         }
     }
 
 
-    export class Append extends Change<ValueSet> {
+    export class Append extends Change<ValueSet, any[]> {
         item: any;
-        constructor(topic:Topic<ValueSet,any>, item: any, id?: string) {
+        constructor(topic:Topic<ValueSet,any[]>, { item, id }: { item: any, id?: string }) {
             super(topic, id);
             this.item = item;
         }
@@ -243,13 +213,13 @@ export namespace SetChangeTypes    {
                 id: this.id,
             };
         }
-        inverse(): Change<ValueSet> {
-            return new Remove(this.topic,this.item);
+        inverse(): Change<ValueSet, any[]> {
+            return new Remove(this.topic, { item: this.item });
         }
     }
-    export class Remove extends Change<ValueSet> {
+    export class Remove extends Change<ValueSet, any[]> {
         item: any;
-        constructor(topic:Topic<ValueSet,any>, item: any, id?: string) {
+        constructor(topic:Topic<ValueSet,any[]>, { item, id }: { item: any, id?: string }) {
             super(topic, id);
             this.item = item;
         }
@@ -268,8 +238,8 @@ export namespace SetChangeTypes    {
                 id: this.id,
             };
         }
-        inverse(): Change<ValueSet> {
-            return new Append(this.topic,this.item);
+        inverse(): Change<ValueSet, any[]> {
+            return new Append(this.topic, { item: this.item });
         }
     }
 }
@@ -278,7 +248,7 @@ export namespace DictChangeTypes{
     export class Set<K,V> extends Change<Map<K,V>>{
         value: Map<K,V>;
         oldValue: Map<K,V>|null;
-        constructor(topic:Topic<Map<K,V>>, value:Map<K,V>, id?: string) {
+        constructor(topic:Topic<Map<K,V>>, { value, id }: { value:Map<K,V>, id?: string }) {
             super(topic,id);
             this.value = value;
             this.oldValue = null;
@@ -298,13 +268,13 @@ export namespace DictChangeTypes{
             };
         }
         inverse(): Change<Map<K,V>>{
-            return new Set(this.topic,this.oldValue!);
+            return new Set(this.topic, { value: this.oldValue! });
         }
     }
     export class Add<K,V> extends Change<Map<K,V>>{
         key: K;
         value: V;
-        constructor(topic:Topic<Map<K,V>>, key:K, value:V, id?: string) {
+        constructor(topic:Topic<Map<K,V>>, { key, value, id }: { key:K, value:V, id?: string }) {
             super(topic,id);
             this.key = key;
             this.value = value;
@@ -327,13 +297,13 @@ export namespace DictChangeTypes{
             };
         }
         inverse(): Change<Map<K,V>>{
-            return new Pop(this.topic,this.key);
+            return new Pop(this.topic, { key: this.key });
         }
     }
     export class Pop<K,V> extends Change<Map<K,V>>{
         key: K;
         value: V|null;
-        constructor(topic:Topic<Map<K,V>>, key:K, id?: string) {
+        constructor(topic:Topic<Map<K,V>>, { key, id }: { key:K, id?: string }) {
             super(topic,id);
             this.key = key;
             this.value = null;
@@ -356,14 +326,14 @@ export namespace DictChangeTypes{
             };
         }
         inverse(): Change<Map<K,V>>{
-            return new Add(this.topic,this.key,this.value!);
+            return new Add(this.topic, { key: this.key, value: this.value! });
         }
     }
     export class ChangeValue<K,V> extends Change<Map<K,V>>{
         key: K;
         value: V;
         oldValue?: V;
-        constructor(topic:Topic<Map<K,V>>, key:K, value:V, old_value?:V, id?: string) {
+        constructor(topic:Topic<Map<K,V>>, { key, value, old_value, id }: { key:K, value:V, old_value?:V, id?: string }) {
             super(topic,id);
             this.key = key;
             this.value = value;
@@ -390,7 +360,9 @@ export namespace DictChangeTypes{
         }
         
         inverse(): Change<Map<K,V>>{
-            return new ChangeValue(this.topic,this.key,this.oldValue!,this.value);
+            return new ChangeValue(this.topic,
+                { key: this.key, value: this.oldValue!, old_value: this.value }
+            );
         }
     }
 }
@@ -399,7 +371,7 @@ export namespace ListChangeTypes{
     export class Set<V> extends Change<Array<V>>{
         value: Array<V>;
         oldValue?: Array<V>;
-        constructor(topic:Topic<Array<V>>, value:Array<V>, old_value?:Array<V>, id?: string) {
+        constructor(topic:Topic<Array<V>>, { value, old_value, id }: { value:Array<V>, old_value?:Array<V>, id?: string }) {
             super(topic,id);
             this.value = value;
             this.oldValue = old_value;
@@ -420,14 +392,14 @@ export namespace ListChangeTypes{
             };
         }
         inverse(): Change<Array<V>>{
-            return new Set(this.topic,this.oldValue!,this.value);
+            return new Set(this.topic, { value: this.oldValue!, old_value: this.value });
         }
     }
     export class Insert<V> extends Change<Array<V>>{
         item: V;
         position: number;
 
-        constructor(topic:Topic<Array<V>>, item:V, position:number, id?: string) {
+        constructor(topic:Topic<Array<V>>, { item, position, id }: { item:V, position:number, id?: string }) {
             super(topic,id);
             this.item = item;
             this.position = position;
@@ -451,13 +423,13 @@ export namespace ListChangeTypes{
             };
         }
         inverse(): Change<Array<V>>{
-            return new Pop(this.topic,this.position);
+            return new Pop(this.topic, { position: this.position });
         }
     }
     export class Pop<V> extends Change<Array<V>>{
         position: number;
         item?: V;
-        constructor(topic:Topic<Array<V>>, position:number, id?: string) {
+        constructor(topic:Topic<Array<V>>, { position, id }: { position:number, id?: string }) {
             super(topic,id);
             this.position = position;
         }
@@ -478,7 +450,7 @@ export namespace ListChangeTypes{
             };
         }
         inverse(): Change<Array<V>>{
-            return new Insert(this.topic,this.item!,this.position);
+            return new Insert(this.topic, { item: this.item!, position: this.position });
         }
     }
 }
@@ -487,7 +459,7 @@ export namespace ListChangeTypes{
 export namespace EventChangeTypes{
     export class Emit extends Change<null> {
         args: any;
-        constructor(topic:Topic<null>, args:any, id?: string) {
+        constructor(topic:Topic<null>, { args, id }: { args:any, id?: string }) {
             super(topic,id);
             this.args = args;
         }
