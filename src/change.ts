@@ -121,8 +121,8 @@ export namespace StringChangeTypes    {
     export class Insert extends Change<string, string, StringTopic> {
 
         private readonly topicVersion: string
-        private readonly position: number
-        private readonly insertion: string
+        public readonly position: number
+        public readonly insertion: string
         private readonly resultTopicVersion: string
         constructor(topic: StringTopic,
                     { topic_version, position, insertion, result_topic_version, id } : { topic_version: string, position: number, insertion: string, result_topic_version?: string, id?: string }) {
@@ -171,8 +171,8 @@ export namespace StringChangeTypes    {
 
     export class Delete extends Change<string, string, StringTopic> {
         private readonly topicVersion: string
-        private readonly position: number
-        private readonly deletion: string
+        public readonly position: number
+        public readonly deletion: string
         private readonly resultTopicVersion: string
         constructor(topic: StringTopic, { topic_version, position, deletion, result_topic_version, id }: { topic_version: string, position: number, deletion: string, result_topic_version?: string, id?: string }) {
             super(topic, id)

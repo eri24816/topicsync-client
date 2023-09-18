@@ -73,6 +73,11 @@ export abstract class Topic<T,TI=T>{
                 callback(this.getValue());
         }
     }
+
+    get inStack(): boolean{
+        return this._stateManager.topicInStack(this);
+    }
+
     public getTypeName(): string{
         return camelToSnake(this.constructor.name.replace('Topic',''));
     }
@@ -197,11 +202,17 @@ export class GenericTopic<T> extends Topic<T, T>{
 export class StringTopic extends Topic<string>{
     public changeTypes = {
         'set': StringChangeTypes.Set,
+        'insert': StringChangeTypes.Insert,
+        'delete': StringChangeTypes.Delete,
     }
+    public onInsert: Action<[number,string], void>;
+    public onDel: Action<[number,string], void>;
     protected value: string;
     private _version: string
     constructor(name:string,stateManager:StateManager){
         super(name,stateManager);
+        this.onInsert = new Action();
+        this.onDel = new Action();
         this.value = '';
         this._version = `${this.getName()}_init`
     }
@@ -243,6 +254,19 @@ export class StringTopic extends Topic<string>{
 
     public get version(): string {
         return this._version
+    }
+
+    protected notifyListenersT(change: Change<string>, oldValue: string, newValue: string): void{
+        if (change instanceof StringChangeTypes.Set) {
+            this.onDel.invoke(0,oldValue);
+            this.onInsert.invoke(0,newValue);
+        }
+        else if (change instanceof StringChangeTypes.Insert) {
+            this.onInsert.invoke(change.position,change.insertion);
+        }
+        else if (change instanceof StringChangeTypes.Delete) {
+            this.onDel.invoke(change.position,change.deletion);
+        }
     }
 }
 

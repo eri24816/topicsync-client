@@ -37,7 +37,7 @@ export class StateManager{
     private allPretendedChanges: PreviewItem[];
     private recordingPreviewOrPretend: PreviewItem[];
     private recordingAction: Change<any>[];
-    private isRecording: boolean;
+    private _isRecording: boolean;
     private _isPretending: boolean;
     get isPretending(): boolean{ return this._isPretending; }
     private onActionProduced: ((action: Change<any>[],actionID:string) => void);
@@ -56,7 +56,7 @@ export class StateManager{
         this.allPretendedChanges = [];
         this.recordingPreviewOrPretend = [];
         this.recordingAction = [];
-        this.isRecording = false;
+        this._isRecording = false;
         this._isPretending = false;
         this.onActionProduced = onActionProduced;
         this.onActionFailed = onActionFailed;
@@ -71,6 +71,14 @@ export class StateManager{
 
     get allSubscribedTopics(): Map<string, Topic<any>> {
         return this.topics
+    }
+
+    topicInStack(topic: Topic<any>): boolean{
+        return this.stackTracker.getStack().includes(topic.getName());
+    }
+
+    get isRecording(): boolean{
+        return this._isRecording;
     }
 
     getTopic<T extends Topic<any>>(topicName: string): T {
@@ -161,7 +169,7 @@ export class StateManager{
         
 
     getIsRecording(): boolean{
-        return this.isRecording;
+        return this._isRecording;
     }
 
     /**
@@ -180,12 +188,12 @@ export class StateManager{
             return;
         }
 
-        if (this.isRecording) {
+        if (this._isRecording) {
             callback();
             return;
         }
 
-        this.isRecording = true;
+        this._isRecording = true;
         this._isPretending = pretend;
         let exceptionOccurred = false;
         this.currentActionID = IdGenerator.generateId();
@@ -219,7 +227,7 @@ export class StateManager{
             }
             this.recordingPreviewOrPretend = [];
             this.recordingAction = [];
-            this.isRecording = false;
+            this._isRecording = false;
             this._isPretending = false;
 
             this.processSetDetached();
@@ -230,7 +238,7 @@ export class StateManager{
         if (this.blockApplyChange)
             return; //TODO: allow non-state topic changes.
 
-        if (!this.isRecording) {
+        if (!this._isRecording) {
             // enter this.record and call this.applyChange again
             this.record(() => {
                 this.applyChange(change,preview);
@@ -351,7 +359,7 @@ export class StateManager{
             return;
         }
 
-        if(this.isRecording)
+        if(this._isRecording)
             throw new Error("Cannot clear pretended changes while recording.");
         
         this.blockApplyChangeContext(() => {

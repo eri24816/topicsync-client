@@ -133,7 +133,7 @@ export class ChatroomClient{
         request.onResponse(response);
     }
 
-    private handleInit({topic_name:topicName,value:value}: {topic_name: string, value: any}) {
+    private handleInit({topic_name:topicName,value:value,...rest}: {topic_name: string, value: any}) {
         if(!this.stateManager.hasTopic(topicName))
             return;
         const topic = this.stateManager.getTopic(topicName);
@@ -144,7 +144,8 @@ export class ChatroomClient{
             topic_name: topicName,
             topic_type: "unknown",
             type: "set",
-            value: value
+            value: value,
+            ...rest
         }
 
         const change = topic.deserializeChange(changeDict);
