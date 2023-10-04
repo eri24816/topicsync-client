@@ -53,8 +53,8 @@ export abstract class Topic<T,TI=T>{
     private validators: Validator<T, TI>[];
     private noPreviewChangeTypes: Set<ConstructorOfChange<T, TI>>;
     public abstract readonly changeTypes: { [key: string]: ConstructorOfChange<T, TI> }
-    public initialized: boolean = false; // Managed by ChatroomClient
-    public onInit = new Action<[TI],void>; // Called by ChatroomClient
+    public initialized: boolean = false; // Managed by TopicsyncClient
+    public onInit = new Action<[TI],void>; // Called by TopicsyncClient
     public onSet = new Action<[TI],void>;
     public onSet2 = new Action<[TI,TI],void>;
     public isPretended: boolean = false;
@@ -332,7 +332,7 @@ export class SetTopic extends Topic<ValueSet,any[]>{
         this.value = new ValueSet();
         this.onAppend = new Action();
         this.onRemove = new Action();
-        if (initValue !== undefined) // for _chatroom/topic_list
+        if (initValue !== undefined) // for _topicsync/topic_list
             this.value.setValues(initValue);
     }
 

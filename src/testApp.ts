@@ -1,31 +1,31 @@
-import { ChatroomClient } from './index';
+import { TopicsyncClient } from './index';
 import { SetTopic, StringTopic } from './index';
 import { expose, print } from './devUtils';
 import { TopicsMonitor } from './index';
 
-const chatroom = new ChatroomClient('ws://localhost:8765');
-// chatroom.onConnected(() => {
-//     chatroom.makeRequest('add', {a:1,b:2}, (response: any) => {
+const topicsync = new TopicsyncClient('ws://localhost:8765');
+// topicsync.onConnected(() => {
+//     topicsync.makeRequest('add', {a:1,b:2}, (response: any) => {
 //         print('1+2=',response);
 //     });
-//     chatroom.makeRequest('greet', {name:'Eric'}, (response: any) => {
+//     topicsync.makeRequest('greet', {name:'Eric'}, (response: any) => {
 //         print(response);
 //     });
 
-//     const a = chatroom.getTopic('a',StringTopic);
-//     const topicSet = chatroom.getTopic('_chatroom/topics',SetTopic);
+//     const a = topicsync.getTopic('a',StringTopic);
+//     const topicSet = topicsync.getTopic('_topicsync/topics',SetTopic);
 //     topicSet.onAppend.add((topic) => {
 //         print('topic added:', topic);
 //     });
 //     topicSet.onRemove.add((topic) => {
 //         print('topic removed:', topic);
 //     });
-//     expose('chatroom', chatroom);
-//     expose('c', chatroom);
+//     expose('topicsync', topicsync);
+//     expose('c', topicsync);
 //     expose('a', a);
 
-//     const monitor = new TopicsMonitor(document.body, chatroom);
+//     const monitor = new TopicsMonitor(document.body, topicsync);
 // });
-new TopicsMonitor(document.body, chatroom);
-expose('chatroom', chatroom);
-expose('c', chatroom);
+new TopicsMonitor(document.body, topicsync);
+expose('topicsync', topicsync);
+expose('c', topicsync);

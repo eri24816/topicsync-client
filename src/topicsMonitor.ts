@@ -1,4 +1,4 @@
-import { ChatroomClient } from "./client";
+import { TopicsyncClient } from "./client";
 import { DictTopic, SetTopic, Topic } from "./topic";
 import { defined, json_stringify } from "./utils";
 import { print } from "./devUtils";
@@ -47,8 +47,8 @@ export class TopicsMonitor{
     rows: Map<string,HTMLTableRowElement>;
     topicList: DictTopic<string,any>;
     topics: Map<string, Topic<any>>;
-    client: ChatroomClient;
-    constructor(container: HTMLElement, client: ChatroomClient) {
+    client: TopicsyncClient;
+    constructor(container: HTMLElement, client: TopicsyncClient) {
         this.container = container;
         this.table = document.createElement('table');
         // monospace font
@@ -74,7 +74,7 @@ export class TopicsMonitor{
         this.table.appendChild(header);
 
         this.container.appendChild(this.table);
-        this.topicList = client.getTopic<DictTopic<string,any>>('_chatroom/topic_list');
+        this.topicList = client.getTopic<DictTopic<string,any>>('_topicsync/topic_list');
         this.topicList.onAdd.add(this.topicAdded.bind(this));
         this.topicList.onPop.add(this.topicRemoved.bind(this));
         for(const [topic,props] of this.topicList.getValue().entries()){

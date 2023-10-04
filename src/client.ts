@@ -13,7 +13,7 @@ class Request{
     }
 }
 
-export class ChatroomClient{
+export class TopicsyncClient{
     private readonly ws: WebSocket;
     private readonly stateManager: StateManager;
     private _clientId: number;
@@ -50,10 +50,10 @@ export class ChatroomClient{
             ['update', this.handleUpdate.bind(this)],
             ['reject', this.handleReject.bind(this)],
         ]);
-        this.topicList = this.stateManager.addSubsciption("_chatroom/topic_list",DictTopic<string,any>);
+        this.topicList = this.stateManager.addSubsciption("_topicsync/topic_list",DictTopic<string,any>);
         this.onConnect = new Action<[], void>();
         this.onConnectCalled = false;
-        this.pretendedTopics = this.stateManager.addSubsciption("_chatroom/pretended_topics",DictTopic<string,string>);
+        this.pretendedTopics = this.stateManager.addSubsciption("_topicsync/pretended_topics",DictTopic<string,string>);
         this.pretendedTopics.onAdd.add((topicName: string, topicType:string) => {
             this.stateManager.addPretendedTopic(topicName,topicType);
         });
@@ -110,8 +110,8 @@ export class ChatroomClient{
     private handleHello({id}: {id: number}) {
         this._clientId = id;
         IdGenerator.instance = new IdGenerator(id+'');
-        console.debug(`[ChatRoom] Connected to server with client ID ${id}`);
-        this.sendToServer('subscribe', { topic_name: "_chatroom/topic_list" });
+        console.debug(`[TopicSync] Connected to server with client ID ${id}`);
+        this.sendToServer('subscribe', { topic_name: "_topicsync/topic_list" });
     }
 
     private handleRequest({service_name: serviceName,args,request_id:requestId}: {service_name: string, args: any, request_id: string}) {
@@ -154,7 +154,7 @@ export class ChatroomClient{
         topic.onInit.invoke(value);
 
         if (!this.onConnectCalled) {
-            // when server sends the value of _chatroom/topics, client can do things about topics
+            // when server sends the value of _topicsync/topics, client can do things about topics
             this.onConnectCalled = true;
             this.onConnect.invoke();
             
@@ -237,7 +237,7 @@ export class ChatroomClient{
      * @param topicName The topic's name.
      */
     public unsubscribe(topicName: string, becauseRemoved: boolean = false) {
-        if(topicName==="_chatroom/topic_list")
+        if(topicName==="_topicsync/topic_list")
             throw new Error(`Cannot unsubscribe from topic ${topicName}`);
         let notifyServer = this.stateManager.removeSubscription(topicName);
         if(notifyServer)

@@ -1,6 +1,6 @@
 {
-  "name": "chatroom-client",
-  "version": "0.5.3",
+  "name": "topicsync-client",
+  "version": "0.7.0",
   "main": "src/index.js",
   "license": "MIT",
   "devDependencies": {
