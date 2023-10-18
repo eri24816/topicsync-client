@@ -173,8 +173,8 @@ export abstract class Topic<T,TI=T>{
 
     private checkDetached(): boolean{
         if (this.detached) {
-            //console.warn(`The topic ${this.name} has been removed or unsubscribed. It will not sync with the server anymore.`);
-            throw new Error(`The topic ${this.name} has been removed or unsubscribed. It will not sync with the server anymore.`);
+            console.warn(`The topic ${this.name} has been removed or unsubscribed. It will not sync with the server anymore.`);
+            //throw new Error(`The topic ${this.name} has been removed or unsubscribed. It will not sync with the server anymore.`);
             return true;
         }
         return false;
