@@ -3,6 +3,7 @@ import { StateManager } from "./stateManager";
 import { DictTopic, EventTopic, SetTopic, Topic } from "./topic";
 import { Change } from "./change";
 import { Action, Constructor, IdGenerator, defined, json_stringify } from "./utils";
+import { BSON } from "./bson"
 
 class Request{
     id: string;
@@ -60,10 +61,18 @@ export class TopicsyncClient{
         this.pretendedTopics.onPop.add((topicName: string) => {
             this.stateManager.removePretendedTopic(topicName);
         });
-        
+        this.ws.binaryType = 'arraybuffer';
         this.ws.onmessage = (event) => {
             console.debug('>\t'+event.data);
-            const data = JSON.parse(event.data);
+            // determine json or bson
+            let data;
+            if (typeof event.data === 'string') {
+                data = JSON.parse(event.data);
+            }
+            else {
+                let buf: ArrayBuffer = event.data;
+                data = BSON.deserialize(new Uint8Array(buf));
+            }
             const messageType = data['type'];
             const args = data['args'];
             defined(this.messageHandlers.get(messageType))(args);
@@ -171,8 +180,6 @@ export class TopicsyncClient{
             if (!this.stateManager.hasTopic(changeDict.topic_name))
                 continue; // This could happen when client subscribed a topic while the update message was in flight.
             const topic = this.stateManager.getTopic(changeDict.topic_name);
-            if(topic instanceof EventTopic)
-                continue;
             const change = topic.deserializeChange(changeDict);
             changeObjects.push(change);
         }
@@ -201,7 +208,7 @@ export class TopicsyncClient{
      * @param topicType The topic's type. Required if the topic is not subscribed.
      * @returns The topic object.
      */
-    public getTopic<T extends Topic<any>>(topicName: string,topicType?: string|Constructor<T>): T {
+    public getTopic<T extends Topic<any>>(topicName: string,topicType?: string|Constructor<T>,subscribe=true): T {
         if (this.stateManager.hasTopic(topicName)) {
             const topic = this.stateManager.getTopic(topicName);
             return topic as T;
@@ -222,11 +229,12 @@ export class TopicsyncClient{
                 topicTypeName = Topic.GetNameFromType(topicType);
             this.pretendedTopics.add(topicName,topicTypeName);
             topic = this.stateManager.getTopic(topicName);
-            //throw new Error(`While pretending, use addPretendedTopic instead of getTopic.`);
         }
         else{
             topic = this.stateManager.addSubsciption(topicName,topicType);
-            this.sendSubscribe(topicName);
+            if(subscribe){
+                this.sendSubscribe(topicName);
+            }
         }
         return topic as T;
     }
@@ -252,13 +260,13 @@ export class TopicsyncClient{
         this.onConnect.add(callback);
     }
 
-    public on(event_name: string, callback: (args:any) => void) {
-        const topic = this.getTopic(event_name,EventTopic);
+    public on(event_name: string, callback: (args:any) => void, sendSubscribe: boolean = true) {
+        const topic = this.getTopic(event_name,EventTopic,sendSubscribe);
         topic.onEmit.add(callback);
     }
 
-    public emit(event_name: string, args: any) {
-        const topic = this.getTopic(event_name,EventTopic);
+    public emit(event_name: string, args: any, sendSubscribe: boolean = false) {
+        const topic = this.getTopic(event_name,EventTopic,sendSubscribe);
         topic.emit(args);
     }
 }
