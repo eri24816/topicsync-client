@@ -59,8 +59,11 @@ export abstract class Topic<T,TI=T>{
     public onSet2 = new Action<[TI,TI],void>;
     public isPretended: boolean = false;
     private detached: boolean;
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         this.name = name;
+
+        // When the stateManager is null, it means that the topic is not attached to topicsync but is simply used as a data
+        // container with callbacks.
         this._stateManager = stateManager;
         this.validators = [];
         this.noPreviewChangeTypes = new Set();
@@ -147,6 +150,10 @@ export abstract class Topic<T,TI=T>{
 
     // kind of cheat here, relaxing the type constraint of SubT to any makes Set-related changes easier
     public applyChangeExternal(change: Change<T, TI, any>): void{
+        if(this.stateManager === null){
+            this.applyChange(change);
+            return;
+        }
         this.checkDetached();
         this.validateChange(change);
         let preview = true;
@@ -186,7 +193,7 @@ export class GenericTopic<T> extends Topic<T, T>{
         'set': GenericChangeTypes.Set<T, GenericTopic<T>>,
     }
     protected value!: T
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         super(name,stateManager);
     }
 
@@ -209,7 +216,7 @@ export class StringTopic extends Topic<string>{
     public onDel: Action<[number,string], void>;
     protected value: string;
     private _version: string
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         super(name,stateManager);
         this.onInsert = new Action();
         this.onDel = new Action();
@@ -276,7 +283,7 @@ export class IntTopic extends Topic<number>{
         'add': IntChangeTypes.Add
     }
     protected value: number;
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         super(name,stateManager);
         this.value = 0;
     }
@@ -300,7 +307,7 @@ export class FloatTopic extends Topic<number>{
         'add': FloatChangeTypes.Add
     }
     protected value: number;
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         super(name,stateManager);
         this.value = 0;
     }
@@ -327,7 +334,7 @@ export class SetTopic extends Topic<ValueSet,any[]>{
     onAppend: Action<[any], void>;
     onRemove: Action<[any], void>;
     protected value: ValueSet;
-    constructor(name:string,stateManager:StateManager,initValue?:any[]){
+    constructor(name:string=null,stateManager:StateManager=null,initValue?:any[]){
         super(name,stateManager);
         this.value = new ValueSet();
         this.onAppend = new Action();
@@ -386,7 +393,7 @@ export class DictTopic<K,V> extends Topic<Map<K,V>>{
     onPop: Action<[K], void>;
     onChangeValue: Action<[K,V], void>;
     protected value: Map<K,V>;
-    constructor(name:string,stateManager:StateManager,initValue?:Map<K,V>){
+    constructor(name:string=null,stateManager:StateManager=null,initValue?:Map<K,V>){
         super(name,stateManager);
         this.value = new Map<K,V>();
         this.onSet = new Action();
@@ -457,7 +464,7 @@ export class ListTopic<V=any> extends Topic<V[]>{
     protected value: V[];
     public onInsert: Action<[V,number], void>;
     public onPop: Action<[V,number], void>;
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         super(name,stateManager);
         this.value = [];
         this.onInsert = new Action();
@@ -532,7 +539,7 @@ export class EventTopic extends Topic<null>{
     }
     protected value: any;
     public onEmit: Action<[any], void>;
-    constructor(name:string,stateManager:StateManager){
+    constructor(name:string=null,stateManager:StateManager=null){
         super(name,stateManager);
         this.value = null;
         this.onEmit = new Action();

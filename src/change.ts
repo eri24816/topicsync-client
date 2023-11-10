@@ -21,6 +21,9 @@ export abstract class Change<T, TI = T, TopicT extends Topic<T, TI> = Topic<T, T
     get topic(): TopicT {
         // force casting here, we assume that the type of topic will remain the same even if
         // it was deleted and then added
+        if(this._topic.stateManager == null){
+            return this._topic;
+        }
         this._topic = this._topic.stateManager.getTopic(this._topic.getName()) as unknown as TopicT;
         return this._topic;
     }
