@@ -34,7 +34,7 @@ export class TopicsyncClient{
     doAfterTransitionFinish: (callback: () => void) => void
     private pretendedTopics: DictTopic<string,string>;
 
-    constructor(host: string){
+    constructor(host: string, onConnectionClosed: () => void = () => {}){
         this.ws = new WebSocket(host);
         this.stateManager = new StateManager(this.onActionProduced.bind(this), this.onActionFailed.bind(this));
         this.record = this.stateManager.record;
@@ -77,6 +77,7 @@ export class TopicsyncClient{
             const args = data['args'];
             defined(this.messageHandlers.get(messageType))(args);
         }
+        this.ws.onclose = onConnectionClosed
     }
 
     private sendToServer(messageType: string, args: any) {
